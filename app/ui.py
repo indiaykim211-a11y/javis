@@ -6,7 +6,7 @@ import threading
 import time
 import tkinter.font as tkfont
 from pathlib import Path
-from tkinter import BooleanVar, END, LEFT, StringVar, TclError, Tk, Toplevel, messagebox
+from tkinter import BooleanVar, Canvas, END, LEFT, StringVar, TclError, Tk, Toplevel, messagebox
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
@@ -126,6 +126,7 @@ class JavisApp:
     def _configure_design_system(self) -> None:
         self._font_body = self._pick_font_family("맑은 고딕", "Malgun Gothic", "Segoe UI", "Arial")
         self._font_display = self._pick_font_family("Segoe UI", "맑은 고딕", "Malgun Gothic", "Arial")
+        self._font_mono = self._pick_font_family("Consolas", "D2Coding", "Courier New", "Arial")
         self._palette = {
             "bg": "#07111b",
             "panel": "#0c1b2a",
@@ -173,8 +174,8 @@ class JavisApp:
         style.configure(".", background=bg, foreground=text)
         style.configure("TFrame", background=bg)
         style.configure("TLabel", background=bg, foreground=text, font=(self._font_body, 10))
-        style.configure("TLabelframe", background=bg, foreground=accent, borderwidth=1, relief="solid")
-        style.configure("TLabelframe.Label", background=bg, foreground=accent, font=(self._font_body, 10, "bold"))
+        style.configure("TLabelframe", background=panel_soft, foreground=accent_ice, bordercolor=line, borderwidth=1, relief="solid")
+        style.configure("TLabelframe.Label", background=panel_soft, foreground=accent_ice, font=(self._font_body, 10, "bold"))
         style.configure("DeckRoot.TFrame", background=bg)
         style.configure("HeroBar.TFrame", background=panel_soft)
         style.configure("HeroInner.TFrame", background=panel_soft)
@@ -186,12 +187,21 @@ class JavisApp:
         style.configure("AccentCard.TLabelframe", background=panel_glow, foreground=accent_ice, bordercolor=line_strong, borderwidth=1)
         style.configure("AccentCard.TLabelframe.Label", background=panel_glow, foreground=accent_ice, font=(self._font_body, 10, "bold"))
         style.configure("HeroTitle.TLabel", background=panel_soft, foreground=accent_ice, font=(self._font_display, 20, "bold"))
-        style.configure("HeroEyebrow.TLabel", background=panel_soft, foreground=accent_soft, font=(self._font_body, 9, "bold"))
+        style.configure("HeroEyebrow.TLabel", background=panel_soft, foreground=accent_soft, font=(self._font_mono, 9, "bold"))
         style.configure("HeroSub.TLabel", background=panel_soft, foreground=muted, font=(self._font_body, 9))
         style.configure("DeckTitle.TLabel", background=bg, foreground=accent_ice, font=(self._font_display, 18, "bold"))
         style.configure("DeckBody.TLabel", background=bg, foreground=muted, font=(self._font_body, 10))
         style.configure("StatValue.TLabel", background=panel_alt, foreground=text, font=(self._font_body, 13, "bold"))
         style.configure("StatCaption.TLabel", background=panel_alt, foreground=muted_soft, font=(self._font_body, 8))
+        style.configure(
+            "MicroChip.TLabel",
+            background=panel_alt,
+            foreground=accent_ice,
+            font=(self._font_mono, 8, "bold"),
+            padding=(10, 4),
+            borderwidth=1,
+            relief="solid",
+        )
         style.configure("RailNav.TButton", background=panel_soft, foreground=muted, bordercolor=panel_soft, focuscolor=line_strong, padding=(12, 10), font=(self._font_body, 10, "bold"))
         style.configure("RailNavActive.TButton", background=panel_glow, foreground=accent_ice, bordercolor=line_strong, focuscolor=accent, padding=(12, 10), font=(self._font_body, 10, "bold"))
         style.map(
@@ -347,6 +357,90 @@ class JavisApp:
         for child in widget.winfo_children():
             self._apply_text_widget_theme(child)
 
+    def _draw_orb(self, canvas: Canvas, *, compact: bool = False) -> None:
+        canvas.delete("all")
+        width = int(canvas.cget("width"))
+        height = int(canvas.cget("height"))
+        center_x = width / 2
+        center_y = height / 2
+        size = min(width, height)
+
+        outer = 8 if not compact else 6
+        mid = 18 if not compact else 14
+        inner = 28 if not compact else 21
+        core = 34 if not compact else 26
+
+        canvas.create_oval(
+            outer,
+            outer,
+            size - outer,
+            size - outer,
+            outline=self._palette["line_strong"],
+            width=1,
+        )
+        canvas.create_arc(
+            outer,
+            outer,
+            size - outer,
+            size - outer,
+            start=26,
+            extent=120,
+            style="arc",
+            outline=self._palette["accent"],
+            width=2,
+        )
+        canvas.create_oval(
+            mid,
+            mid,
+            size - mid,
+            size - mid,
+            outline=self._palette["accent_soft"],
+            width=1,
+        )
+        canvas.create_arc(
+            mid,
+            mid,
+            size - mid,
+            size - mid,
+            start=214,
+            extent=92,
+            style="arc",
+            outline=self._palette["success"],
+            width=2,
+        )
+        canvas.create_oval(
+            inner,
+            inner,
+            size - inner,
+            size - inner,
+            fill=self._palette["accent_soft"],
+            outline="",
+        )
+        canvas.create_oval(
+            core,
+            core,
+            size - core,
+            size - core,
+            fill=self._palette["accent_ice"],
+            outline="",
+        )
+        canvas.create_line(
+            center_x - 22,
+            center_y,
+            center_x + 22,
+            center_y,
+            fill=self._palette["bg"],
+            width=1,
+        )
+        canvas.create_line(
+            center_x,
+            center_y - 22,
+            center_x,
+            center_y + 22,
+            fill=self._palette["bg"],
+            width=1,
+        )
+
     def _build_popup_shell(self) -> None:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
@@ -371,6 +465,9 @@ class JavisApp:
         self.compact_button_var = StringVar(value="간단히")
         self.popup_eyebrow_var = StringVar(value="AUTONOMOUS CODEX OPERATOR")
         self.popup_subtitle_var = StringVar(value="핀테크급 운영 감각으로 현재 상태와 다음 행동을 요약합니다.")
+        self.popup_chip_primary_var = StringVar(value="READY")
+        self.popup_chip_progress_var = StringVar(value="0 / 0")
+        self.popup_chip_risk_var = StringVar(value="LOW RISK")
 
         header = ttk.Frame(shell, style="HeroBar.TFrame", padding=14)
         header.grid(row=0, column=0, sticky="ew")
@@ -388,12 +485,34 @@ class JavisApp:
 
         header_actions = ttk.Frame(header, style="HeroInner.TFrame")
         header_actions.grid(row=0, column=1, sticky="e")
-        ttk.Label(header_actions, textvariable=self.popup_badge_var, style="PopupBadge.TLabel").pack(
+        self.popup_orb_canvas = Canvas(
+            header_actions,
+            width=78,
+            height=78,
+            background=self._palette["panel_soft"],
+            highlightthickness=0,
+            bd=0,
+        )
+        self.popup_orb_canvas.pack(side=LEFT, padx=(0, 12))
+        self._draw_orb(self.popup_orb_canvas)
+
+        header_stack = ttk.Frame(header_actions, style="HeroInner.TFrame")
+        header_stack.pack(side=LEFT, anchor="e")
+
+        chip_row = ttk.Frame(header_stack, style="HeroInner.TFrame")
+        chip_row.pack(anchor="e")
+        ttk.Label(chip_row, textvariable=self.popup_chip_primary_var, style="MicroChip.TLabel").pack(side=LEFT, padx=(0, 6))
+        ttk.Label(chip_row, textvariable=self.popup_chip_progress_var, style="MicroChip.TLabel").pack(side=LEFT, padx=(0, 6))
+        ttk.Label(chip_row, textvariable=self.popup_chip_risk_var, style="MicroChip.TLabel").pack(side=LEFT)
+
+        button_row = ttk.Frame(header_stack, style="HeroInner.TFrame")
+        button_row.pack(anchor="e", pady=(10, 0))
+        ttk.Label(button_row, textvariable=self.popup_badge_var, style="PopupBadge.TLabel").pack(
             side=LEFT, padx=(0, 8)
         )
-        ttk.Button(header_actions, text="설정", command=self.open_control_center).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(button_row, text="설정", command=self.open_control_center).pack(side=LEFT, padx=(0, 6))
         ttk.Button(
-            header_actions,
+            button_row,
             textvariable=self.compact_button_var,
             command=self.toggle_popup_compact,
         ).pack(side=LEFT)
@@ -519,6 +638,9 @@ class JavisApp:
 
         self.control_header_project_var = StringVar(value="프로젝트 정보 미입력")
         self.control_header_status_var = StringVar(value="세션 상태를 불러오는 중입니다.")
+        self.control_header_mode_value_var = StringVar(value="준비")
+        self.control_header_lane_value_var = StringVar(value="대기")
+        self.control_header_saved_value_var = StringVar(value="미저장")
         self.control_section_var = StringVar(value="project")
         self.control_section_frames: dict[str, ttk.Frame] = {}
         self.control_section_labels: dict[str, str] = {}
@@ -571,9 +693,27 @@ class JavisApp:
 
         header_actions = ttk.Frame(header, style="HeroInner.TFrame")
         header_actions.grid(row=0, column=1, sticky="e")
-        ttk.Button(header_actions, text="세션 저장", command=self.save_session).pack(side=LEFT, padx=(0, 8))
-        ttk.Button(header_actions, text="팝업으로", command=self.hide_control_center).pack(side=LEFT, padx=(0, 8))
-        ttk.Button(header_actions, text="닫기", command=self.hide_control_center).pack(side=LEFT)
+
+        metric_row = ttk.Frame(header_actions, style="HeroInner.TFrame")
+        metric_row.pack(anchor="e")
+
+        for index, (caption, variable) in enumerate(
+            [
+                ("MODE", self.control_header_mode_value_var),
+                ("LANE", self.control_header_lane_value_var),
+                ("SAVED", self.control_header_saved_value_var),
+            ]
+        ):
+            card = ttk.Frame(metric_row, style="StatusStrip.TFrame", padding=(12, 8))
+            card.grid(row=0, column=index, sticky="nsew", padx=(0, 8 if index < 2 else 0))
+            ttk.Label(card, text=caption, style="StatCaption.TLabel").grid(row=0, column=0, sticky="e")
+            ttk.Label(card, textvariable=variable, style="StatValue.TLabel").grid(row=1, column=0, sticky="e", pady=(2, 0))
+
+        button_row = ttk.Frame(header_actions, style="HeroInner.TFrame")
+        button_row.pack(anchor="e", pady=(10, 0))
+        ttk.Button(button_row, text="세션 저장", command=self.save_session).pack(side=LEFT, padx=(0, 8))
+        ttk.Button(button_row, text="팝업으로", command=self.hide_control_center).pack(side=LEFT, padx=(0, 8))
+        ttk.Button(button_row, text="닫기", command=self.hide_control_center).pack(side=LEFT)
 
         body = ttk.Frame(parent, style="DeckRoot.TFrame", padding=(14, 0, 14, 14))
         body.grid(row=1, column=0, columnspan=2, sticky="nsew")
@@ -2247,6 +2387,9 @@ class JavisApp:
         target_label = self.runtime.last_target_title or "타깃 미확정"
         self.control_header_project_var.set(project_label)
         self.control_header_status_var.set(f"세션 {saved_label} | 상태 {state_label} | {target_label}")
+        self.control_header_mode_value_var.set(self.session.codex_strategy.selected_mode().title.split("|")[0].strip())
+        self.control_header_lane_value_var.set(self.engine.recommend_live_ops_status(self.session, self.runtime).lane_id)
+        self.control_header_saved_value_var.set(saved_label[:16])
 
     def _codex_strategy_label_for_id(self, preset_id: str) -> str:
         return self.codex_strategy_label_by_id.get(
@@ -4598,6 +4741,9 @@ class JavisApp:
         self.popup_meta_var.set(self._surface_state.progress_label)
         self.popup_detail_var.set(self._surface_state.detail_label)
         self.popup_risk_var.set(f"위험 레벨 {self._surface_state.risk_label}")
+        self.popup_chip_primary_var.set(self._surface_state.badge_label.upper())
+        self.popup_chip_progress_var.set(self._surface_state.progress_label.replace("진행 ", "STEP "))
+        self.popup_chip_risk_var.set(f"RISK {self._surface_state.risk_label.upper()}")
         self._render_popup_actions()
         self._update_popup_density()
 
