@@ -131,12 +131,15 @@ class JavisApp:
             "panel": "#0c1b2a",
             "panel_soft": "#112538",
             "panel_alt": "#142f46",
+            "panel_glow": "#183c58",
             "line": "#17364f",
             "line_strong": "#1ea7d7",
             "accent": "#6ce8ff",
             "accent_soft": "#3cc7f4",
+            "accent_ice": "#baf6ff",
             "text": "#effaff",
             "muted": "#95b8c8",
+            "muted_soft": "#6f95a7",
             "success": "#67f0c2",
             "warning": "#ffd071",
             "danger": "#ff8f8f",
@@ -157,18 +160,52 @@ class JavisApp:
         panel = self._palette["panel"]
         panel_soft = self._palette["panel_soft"]
         panel_alt = self._palette["panel_alt"]
+        panel_glow = self._palette["panel_glow"]
         line = self._palette["line"]
         line_strong = self._palette["line_strong"]
         accent = self._palette["accent"]
         accent_soft = self._palette["accent_soft"]
+        accent_ice = self._palette["accent_ice"]
         text = self._palette["text"]
         muted = self._palette["muted"]
+        muted_soft = self._palette["muted_soft"]
 
         style.configure(".", background=bg, foreground=text)
         style.configure("TFrame", background=bg)
         style.configure("TLabel", background=bg, foreground=text, font=(self._font_body, 10))
         style.configure("TLabelframe", background=bg, foreground=accent, borderwidth=1, relief="solid")
         style.configure("TLabelframe.Label", background=bg, foreground=accent, font=(self._font_body, 10, "bold"))
+        style.configure("DeckRoot.TFrame", background=bg)
+        style.configure("HeroBar.TFrame", background=panel_soft)
+        style.configure("HeroInner.TFrame", background=panel_soft)
+        style.configure("StatusStrip.TFrame", background=panel_alt)
+        style.configure("Rail.TLabelframe", background=panel_soft, foreground=accent_ice, bordercolor=line_strong, borderwidth=1)
+        style.configure("Rail.TLabelframe.Label", background=panel_soft, foreground=accent_ice, font=(self._font_body, 10, "bold"))
+        style.configure("DeckCard.TLabelframe", background=panel_soft, foreground=accent_ice, bordercolor=line, borderwidth=1)
+        style.configure("DeckCard.TLabelframe.Label", background=panel_soft, foreground=accent_ice, font=(self._font_body, 10, "bold"))
+        style.configure("AccentCard.TLabelframe", background=panel_glow, foreground=accent_ice, bordercolor=line_strong, borderwidth=1)
+        style.configure("AccentCard.TLabelframe.Label", background=panel_glow, foreground=accent_ice, font=(self._font_body, 10, "bold"))
+        style.configure("HeroTitle.TLabel", background=panel_soft, foreground=accent_ice, font=(self._font_display, 20, "bold"))
+        style.configure("HeroEyebrow.TLabel", background=panel_soft, foreground=accent_soft, font=(self._font_body, 9, "bold"))
+        style.configure("HeroSub.TLabel", background=panel_soft, foreground=muted, font=(self._font_body, 9))
+        style.configure("DeckTitle.TLabel", background=bg, foreground=accent_ice, font=(self._font_display, 18, "bold"))
+        style.configure("DeckBody.TLabel", background=bg, foreground=muted, font=(self._font_body, 10))
+        style.configure("StatValue.TLabel", background=panel_alt, foreground=text, font=(self._font_body, 13, "bold"))
+        style.configure("StatCaption.TLabel", background=panel_alt, foreground=muted_soft, font=(self._font_body, 8))
+        style.configure("RailNav.TButton", background=panel_soft, foreground=muted, bordercolor=panel_soft, focuscolor=line_strong, padding=(12, 10), font=(self._font_body, 10, "bold"))
+        style.configure("RailNavActive.TButton", background=panel_glow, foreground=accent_ice, bordercolor=line_strong, focuscolor=accent, padding=(12, 10), font=(self._font_body, 10, "bold"))
+        style.map(
+            "RailNav.TButton",
+            background=[("pressed", panel_alt), ("active", panel_alt)],
+            foreground=[("pressed", text), ("active", text)],
+            bordercolor=[("active", line)],
+        )
+        style.map(
+            "RailNavActive.TButton",
+            background=[("pressed", panel_glow), ("active", panel_glow)],
+            foreground=[("pressed", accent_ice), ("active", accent_ice)],
+            bordercolor=[("active", accent)],
+        )
         style.configure(
             "TButton",
             background=panel,
@@ -232,14 +269,14 @@ class JavisApp:
         style.configure("Horizontal.TSeparator", background=line)
 
         style.configure("PopupShell.TFrame", background=bg, padding=22)
-        style.configure("PopupTitle.TLabel", background=bg, foreground=accent, font=(self._font_display, 18, "bold"))
+        style.configure("PopupTitle.TLabel", background=panel_soft, foreground=accent_ice, font=(self._font_display, 18, "bold"))
         style.configure("PopupProject.TLabel", background=bg, foreground=muted, font=(self._font_body, 9))
         style.configure(
             "PopupBadge.TLabel",
-            background=panel_soft,
-            foreground=accent,
+            background=panel_alt,
+            foreground=accent_ice,
             font=(self._font_body, 9, "bold"),
-            padding=(10, 4),
+            padding=(12, 5),
             borderwidth=1,
             relief="solid",
         )
@@ -247,6 +284,12 @@ class JavisApp:
         style.configure("PopupBody.TLabel", background=bg, foreground=text, font=(self._font_body, 10))
         style.configure("PopupMeta.TLabel", background=bg, foreground=muted, font=(self._font_body, 9))
         style.configure("PopupSection.TLabel", background=bg, foreground=accent_soft, font=(self._font_body, 9, "bold"))
+        style.configure("AccentHeadline.TLabel", background=panel_glow, foreground=accent_ice, font=(self._font_body, 15, "bold"))
+        style.configure("AccentBody.TLabel", background=panel_glow, foreground=text, font=(self._font_body, 10))
+        style.configure("CardHeadline.TLabel", background=panel_soft, foreground=accent_ice, font=(self._font_body, 13, "bold"))
+        style.configure("CardBody.TLabel", background=panel_soft, foreground=text, font=(self._font_body, 10))
+        style.configure("CardMeta.TLabel", background=panel_soft, foreground=muted, font=(self._font_body, 9))
+        style.configure("StripMeta.TLabel", background=panel_alt, foreground=muted, font=(self._font_body, 9))
         style.configure(
             "PopupPrimary.TButton",
             background=accent_soft,
@@ -326,20 +369,24 @@ class JavisApp:
         self.popup_risk_var = StringVar(value="위험 레벨 낮음")
         self.popup_last_event_var = StringVar(value="최근 이벤트가 아직 없습니다.")
         self.compact_button_var = StringVar(value="간단히")
+        self.popup_eyebrow_var = StringVar(value="AUTONOMOUS CODEX OPERATOR")
+        self.popup_subtitle_var = StringVar(value="핀테크급 운영 감각으로 현재 상태와 다음 행동을 요약합니다.")
 
-        header = ttk.Frame(shell)
+        header = ttk.Frame(shell, style="HeroBar.TFrame", padding=14)
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
 
-        title_block = ttk.Frame(header)
+        title_block = ttk.Frame(header, style="HeroInner.TFrame")
         title_block.grid(row=0, column=0, sticky="w")
-        ttk.Label(title_block, text="JAVIS // Live Ops", style="PopupTitle.TLabel").grid(row=0, column=0, sticky="w")
-        self.popup_project_label = ttk.Label(title_block, textvariable=self.popup_project_var, style="PopupProject.TLabel")
+        ttk.Label(title_block, textvariable=self.popup_eyebrow_var, style="HeroEyebrow.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(title_block, text="JAVIS // Live Ops", style="PopupTitle.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(title_block, textvariable=self.popup_subtitle_var, style="HeroSub.TLabel").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        self.popup_project_label = ttk.Label(title_block, textvariable=self.popup_project_var, style="HeroSub.TLabel")
         self.popup_project_label.grid(
-            row=1, column=0, sticky="w", pady=(2, 0)
+            row=3, column=0, sticky="w", pady=(6, 0)
         )
 
-        header_actions = ttk.Frame(header)
+        header_actions = ttk.Frame(header, style="HeroInner.TFrame")
         header_actions.grid(row=0, column=1, sticky="e")
         ttk.Label(header_actions, textvariable=self.popup_badge_var, style="PopupBadge.TLabel").pack(
             side=LEFT, padx=(0, 8)
@@ -358,28 +405,28 @@ class JavisApp:
         body.columnconfigure(0, weight=1)
         self.popup_body = body
 
-        status_card = ttk.LabelFrame(body, text="지금 상태", padding=12)
+        status_card = ttk.LabelFrame(body, text="지금 상태", padding=14, style="AccentCard.TLabelframe")
         status_card.grid(row=0, column=0, sticky="ew")
         status_card.columnconfigure(0, weight=1)
-        ttk.Label(status_card, textvariable=self.popup_title_var, style="PopupHeadline.TLabel").grid(
+        ttk.Label(status_card, textvariable=self.popup_title_var, style="AccentHeadline.TLabel").grid(
             row=0, column=0, sticky="w"
         )
         self.popup_status_label = ttk.Label(
             status_card,
             textvariable=self.popup_status_var,
-            style="PopupBody.TLabel",
+            style="AccentBody.TLabel",
             wraplength=340,
             justify="left",
         )
         self.popup_status_label.grid(row=1, column=0, sticky="w", pady=(6, 0))
 
-        self.popup_compact_frame = ttk.LabelFrame(body, text="한눈에 보기", padding=12)
+        self.popup_compact_frame = ttk.LabelFrame(body, text="한눈에 보기", padding=14, style="DeckCard.TLabelframe")
         self.popup_compact_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         self.popup_compact_frame.columnconfigure(0, weight=1)
         self.popup_compact_hint_label = ttk.Label(
             self.popup_compact_frame,
             textvariable=self.popup_compact_hint_var,
-            style="PopupBody.TLabel",
+            style="CardBody.TLabel",
             wraplength=340,
             justify="left",
         )
@@ -390,42 +437,42 @@ class JavisApp:
         self.popup_detail_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
         self.popup_detail_frame.columnconfigure(0, weight=1)
 
-        reason_card = ttk.LabelFrame(self.popup_detail_frame, text="판단 이유", padding=12)
+        reason_card = ttk.LabelFrame(self.popup_detail_frame, text="판단 이유", padding=14, style="DeckCard.TLabelframe")
         reason_card.grid(row=0, column=0, sticky="ew")
         reason_card.columnconfigure(0, weight=1)
         self.popup_reason_label = ttk.Label(
             reason_card,
             textvariable=self.popup_reason_var,
-            style="PopupBody.TLabel",
+            style="CardBody.TLabel",
             wraplength=340,
             justify="left",
         )
         self.popup_reason_label.grid(row=0, column=0, sticky="w")
 
-        next_card = ttk.LabelFrame(self.popup_detail_frame, text="추천 행동", padding=12)
+        next_card = ttk.LabelFrame(self.popup_detail_frame, text="추천 행동", padding=14, style="DeckCard.TLabelframe")
         next_card.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         next_card.columnconfigure(0, weight=1)
         self.popup_next_label = ttk.Label(
             next_card,
             textvariable=self.popup_next_action_var,
-            style="PopupBody.TLabel",
+            style="CardBody.TLabel",
             wraplength=340,
             justify="left",
         )
         self.popup_next_label.grid(row=0, column=0, sticky="w")
 
-        footer = ttk.Frame(body)
+        footer = ttk.Frame(body, style="StatusStrip.TFrame", padding=12)
         footer.grid(row=3, column=0, sticky="ew", pady=(12, 0))
         footer.columnconfigure(0, weight=1)
         footer.columnconfigure(1, weight=1)
-        self.popup_meta_label = ttk.Label(footer, textvariable=self.popup_meta_var, style="PopupMeta.TLabel")
+        self.popup_meta_label = ttk.Label(footer, textvariable=self.popup_meta_var, style="StripMeta.TLabel")
         self.popup_meta_label.grid(row=0, column=0, sticky="w")
-        self.popup_risk_label = ttk.Label(footer, textvariable=self.popup_risk_var, style="PopupMeta.TLabel")
+        self.popup_risk_label = ttk.Label(footer, textvariable=self.popup_risk_var, style="StripMeta.TLabel")
         self.popup_risk_label.grid(row=0, column=1, sticky="e")
         self.popup_detail_label = ttk.Label(
             footer,
             textvariable=self.popup_detail_var,
-            style="PopupMeta.TLabel",
+            style="StripMeta.TLabel",
             wraplength=340,
             justify="left",
         )
@@ -433,14 +480,14 @@ class JavisApp:
         self.popup_last_event_label = ttk.Label(
             footer,
             textvariable=self.popup_last_event_var,
-            style="PopupMeta.TLabel",
+            style="StripMeta.TLabel",
             wraplength=340,
             justify="left",
         )
         self.popup_last_event_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self.popup_footer_frame = footer
 
-        action_bar = ttk.Frame(shell)
+        action_bar = ttk.Frame(shell, style="HeroInner.TFrame")
         action_bar.grid(row=3, column=0, sticky="ew", pady=(14, 0))
         self.popup_action_bar = action_bar
         for column in range(4):
@@ -459,7 +506,7 @@ class JavisApp:
     def _build_control_center(self) -> None:
         self.control_center = Toplevel(self.root)
         self.control_center.title("JAVIS // Control Deck")
-        self.control_center.geometry("1280x940")
+        self.control_center.geometry("1320x960")
         self.control_center.configure(background=self._palette["bg"])
         self.control_center.transient(self.root)
         self.control_center.protocol("WM_DELETE_WINDOW", self.hide_control_center)
@@ -499,43 +546,45 @@ class JavisApp:
         self.visual_retention_choice_by_label: dict[str, str] = {}
         self.visual_retention_label_by_id: dict[str, str] = {}
 
-        header = ttk.Frame(parent, padding=12)
+        header = ttk.Frame(parent, style="HeroBar.TFrame", padding=16)
         header.grid(row=0, column=0, columnspan=2, sticky="ew")
         header.columnconfigure(0, weight=1)
 
-        title_block = ttk.Frame(header)
+        title_block = ttk.Frame(header, style="HeroInner.TFrame")
         title_block.grid(row=0, column=0, sticky="w")
-        ttk.Label(title_block, text="JAVIS // Control Deck", style="PopupTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(title_block, text="CONTROL DECK", style="HeroEyebrow.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(title_block, text="JAVIS // Control Deck", style="PopupTitle.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 0))
         ttk.Label(
             title_block,
             textvariable=self.control_header_project_var,
-            style="PopupProject.TLabel",
+            style="HeroSub.TLabel",
             wraplength=720,
             justify="left",
-        ).grid(row=1, column=0, sticky="w", pady=(2, 0))
+        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
         ttk.Label(
             title_block,
             textvariable=self.control_header_status_var,
+            style="HeroSub.TLabel",
             wraplength=720,
             justify="left",
-        ).grid(row=2, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=3, column=0, sticky="w", pady=(4, 0))
 
-        header_actions = ttk.Frame(header)
+        header_actions = ttk.Frame(header, style="HeroInner.TFrame")
         header_actions.grid(row=0, column=1, sticky="e")
         ttk.Button(header_actions, text="세션 저장", command=self.save_session).pack(side=LEFT, padx=(0, 8))
         ttk.Button(header_actions, text="팝업으로", command=self.hide_control_center).pack(side=LEFT, padx=(0, 8))
         ttk.Button(header_actions, text="닫기", command=self.hide_control_center).pack(side=LEFT)
 
-        body = ttk.Frame(parent, padding=(12, 0, 12, 12))
+        body = ttk.Frame(parent, style="DeckRoot.TFrame", padding=(14, 0, 14, 14))
         body.grid(row=1, column=0, columnspan=2, sticky="nsew")
         body.columnconfigure(1, weight=1)
         body.rowconfigure(0, weight=1)
 
-        nav = ttk.LabelFrame(body, text="섹션", padding=12)
+        nav = ttk.LabelFrame(body, text="오퍼레이션 레일", padding=12, style="Rail.TLabelframe")
         nav.grid(row=0, column=0, sticky="nsw", padx=(0, 12))
         self.control_nav = nav
 
-        content = ttk.Frame(body)
+        content = ttk.Frame(body, style="DeckRoot.TFrame")
         content.grid(row=0, column=1, sticky="nsew")
         content.columnconfigure(0, weight=1)
         content.rowconfigure(0, weight=1)
@@ -584,50 +633,55 @@ class JavisApp:
         home_frame.columnconfigure(0, weight=1)
         home_frame.columnconfigure(1, weight=1)
 
-        current_card = ttk.LabelFrame(home_frame, text="현재 프로젝트", padding=12)
+        current_card = ttk.LabelFrame(home_frame, text="현재 프로젝트", padding=12, style="AccentCard.TLabelframe")
         current_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         current_card.columnconfigure(0, weight=1)
 
-        ttk.Label(current_card, textvariable=self.project_home_title_var, style="PopupHeadline.TLabel").grid(
+        ttk.Label(current_card, textvariable=self.project_home_title_var, style="AccentHeadline.TLabel").grid(
             row=0, column=0, sticky="w"
         )
         ttk.Label(
             current_card,
             textvariable=self.project_home_target_var,
+            style="AccentBody.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Label(
             current_card,
             textvariable=self.project_home_strategy_var,
+            style="AccentBody.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=2, column=0, sticky="w", pady=(8, 0))
         ttk.Label(
             current_card,
             textvariable=self.project_home_progress_var,
+            style="AccentBody.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=3, column=0, sticky="w", pady=(8, 0))
         ttk.Label(
             current_card,
             textvariable=self.project_home_status_var,
+            style="AccentBody.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=4, column=0, sticky="w", pady=(8, 0))
         ttk.Label(
             current_card,
             textvariable=self.project_home_capture_var,
+            style="AccentBody.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=5, column=0, sticky="w", pady=(8, 0))
-        ttk.Label(current_card, textvariable=self.schema_version_var, wraplength=340, justify="left").grid(
+        ttk.Label(current_card, textvariable=self.schema_version_var, style="CardMeta.TLabel", wraplength=340, justify="left").grid(
             row=6, column=0, sticky="w", pady=(12, 0)
         )
-        ttk.Label(current_card, textvariable=self.last_saved_var, wraplength=340, justify="left").grid(
+        ttk.Label(current_card, textvariable=self.last_saved_var, style="CardMeta.TLabel", wraplength=340, justify="left").grid(
             row=7, column=0, sticky="w", pady=(4, 0)
         )
-        ttk.Label(current_card, textvariable=self.log_reference_var, wraplength=340, justify="left").grid(
+        ttk.Label(current_card, textvariable=self.log_reference_var, style="CardMeta.TLabel", wraplength=340, justify="left").grid(
             row=8, column=0, sticky="w", pady=(4, 0)
         )
 
@@ -650,7 +704,7 @@ class JavisApp:
             command=lambda: self._select_control_center_section("codex"),
         ).grid(row=0, column=2, sticky="ew")
 
-        recent_card = ttk.LabelFrame(home_frame, text="최근 프로젝트 / 이어가기", padding=12)
+        recent_card = ttk.LabelFrame(home_frame, text="최근 프로젝트 / 이어가기", padding=12, style="DeckCard.TLabelframe")
         recent_card.grid(row=0, column=1, sticky="nsew")
         recent_card.columnconfigure(0, weight=1)
 
@@ -661,30 +715,35 @@ class JavisApp:
         ttk.Label(
             recent_card,
             textvariable=self.recent_project_summary_var,
+            style="CardHeadline.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=1, column=0, sticky="w", pady=(10, 0))
         ttk.Label(
             recent_card,
             textvariable=self.recent_project_target_var,
+            style="CardBody.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=2, column=0, sticky="w", pady=(8, 0))
         ttk.Label(
             recent_card,
             textvariable=self.recent_project_strategy_var,
+            style="CardBody.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=3, column=0, sticky="w", pady=(8, 0))
         ttk.Label(
             recent_card,
             textvariable=self.recent_project_progress_var,
+            style="CardBody.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=4, column=0, sticky="w", pady=(8, 0))
         ttk.Label(
             recent_card,
             textvariable=self.recent_project_capture_var,
+            style="CardMeta.TLabel",
             wraplength=340,
             justify="left",
         ).grid(row=5, column=0, sticky="w", pady=(8, 0))
@@ -705,7 +764,7 @@ class JavisApp:
             command=self._refresh_project_home,
         ).grid(row=0, column=1, sticky="ew")
 
-        project_frame = ttk.LabelFrame(project_section, text="현재 프로젝트 편집", padding=12)
+        project_frame = ttk.LabelFrame(project_section, text="현재 프로젝트 편집", padding=12, style="DeckCard.TLabelframe")
         project_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
         project_frame.columnconfigure(0, weight=1)
 
@@ -717,7 +776,7 @@ class JavisApp:
         self.target_outcome = ScrolledText(project_frame, height=4, wrap="word")
         self.target_outcome.grid(row=3, column=0, sticky="ew")
 
-        steps_frame = ttk.LabelFrame(project_section, text="단계 목록", padding=12)
+        steps_frame = ttk.LabelFrame(project_section, text="단계 목록", padding=12, style="DeckCard.TLabelframe")
         steps_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
         steps_frame.columnconfigure(0, weight=1)
         steps_frame.rowconfigure(0, weight=1)
@@ -745,7 +804,7 @@ class JavisApp:
         codex_strategy_section.rowconfigure(7, weight=1)
         codex_strategy_section.rowconfigure(8, weight=1)
 
-        strategy_intro = ttk.LabelFrame(codex_strategy_section, text="Codex-first 안내", padding=12)
+        strategy_intro = ttk.LabelFrame(codex_strategy_section, text="Codex-first 안내", padding=12, style="AccentCard.TLabelframe")
         strategy_intro.grid(row=0, column=0, sticky="ew")
         strategy_intro.columnconfigure(0, weight=1)
         ttk.Label(
@@ -758,7 +817,7 @@ class JavisApp:
             justify="left",
         ).grid(row=0, column=0, sticky="w")
 
-        strategy_picker = ttk.LabelFrame(codex_strategy_section, text="운영 시나리오 선택", padding=12)
+        strategy_picker = ttk.LabelFrame(codex_strategy_section, text="운영 시나리오 선택", padding=12, style="DeckCard.TLabelframe")
         strategy_picker.grid(row=1, column=0, sticky="ew", pady=(12, 0))
         strategy_picker.columnconfigure(1, weight=1)
 
@@ -803,7 +862,7 @@ class JavisApp:
             )
             strategy_actions.columnconfigure(index, weight=1)
 
-        mode_frame = ttk.LabelFrame(codex_strategy_section, text="Automation mode 선택", padding=12)
+        mode_frame = ttk.LabelFrame(codex_strategy_section, text="Automation mode 선택", padding=12, style="DeckCard.TLabelframe")
         mode_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
         mode_frame.columnconfigure(1, weight=1)
 
@@ -845,7 +904,7 @@ class JavisApp:
         strategy_body.columnconfigure(0, weight=1)
         strategy_body.columnconfigure(1, weight=1)
 
-        recommended_frame = ttk.LabelFrame(strategy_body, text="추천 운영 정보", padding=12)
+        recommended_frame = ttk.LabelFrame(strategy_body, text="추천 운영 정보", padding=12, style="DeckCard.TLabelframe")
         recommended_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         recommended_frame.columnconfigure(0, weight=1)
 
@@ -880,7 +939,7 @@ class JavisApp:
             justify="left",
         ).grid(row=4, column=0, sticky="w", pady=(4, 0))
 
-        roles_frame = ttk.LabelFrame(strategy_body, text="역할 분리", padding=12)
+        roles_frame = ttk.LabelFrame(strategy_body, text="역할 분리", padding=12, style="DeckCard.TLabelframe")
         roles_frame.grid(row=0, column=1, sticky="nsew")
         roles_frame.columnconfigure(0, weight=1)
 
@@ -904,7 +963,7 @@ class JavisApp:
             justify="left",
         ).grid(row=2, column=0, sticky="w", pady=(8, 0))
 
-        strategy_note_frame = ttk.LabelFrame(codex_strategy_section, text="추가 지시 / follow-up 메모", padding=12)
+        strategy_note_frame = ttk.LabelFrame(codex_strategy_section, text="추가 지시 / follow-up 메모", padding=12, style="DeckCard.TLabelframe")
         strategy_note_frame.grid(row=4, column=0, sticky="ew", pady=(12, 0))
         strategy_note_frame.columnconfigure(0, weight=1)
         ttk.Label(
@@ -916,7 +975,7 @@ class JavisApp:
         self.codex_strategy_note = ScrolledText(strategy_note_frame, height=4, wrap="word")
         self.codex_strategy_note.grid(row=1, column=0, sticky="ew", pady=(8, 0))
 
-        strategy_prompt_frame = ttk.LabelFrame(codex_strategy_section, text="Launch-ready Prompt 초안", padding=12)
+        strategy_prompt_frame = ttk.LabelFrame(codex_strategy_section, text="Launch-ready Prompt 초안", padding=12, style="AccentCard.TLabelframe")
         strategy_prompt_frame.grid(row=5, column=0, sticky="nsew", pady=(12, 0))
         strategy_prompt_frame.columnconfigure(0, weight=1)
         strategy_prompt_frame.rowconfigure(1, weight=1)
@@ -938,7 +997,7 @@ class JavisApp:
         strategy_bottom.rowconfigure(0, weight=1)
         strategy_bottom.rowconfigure(1, weight=1)
 
-        runbook_frame = ttk.LabelFrame(strategy_bottom, text="Launch Checklist / Handoff", padding=12)
+        runbook_frame = ttk.LabelFrame(strategy_bottom, text="Launch Checklist / Handoff", padding=12, style="DeckCard.TLabelframe")
         runbook_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=(0, 8))
         runbook_frame.columnconfigure(0, weight=1)
         runbook_frame.rowconfigure(1, weight=1)
@@ -955,7 +1014,7 @@ class JavisApp:
             row=2, column=0, sticky="ew"
         )
 
-        runboard_frame = ttk.LabelFrame(strategy_bottom, text="Automation Runboard", padding=12)
+        runboard_frame = ttk.LabelFrame(strategy_bottom, text="Automation Runboard", padding=12, style="DeckCard.TLabelframe")
         runboard_frame.grid(row=0, column=1, sticky="nsew", pady=(0, 8))
         runboard_frame.columnconfigure(0, weight=1)
         runboard_frame.rowconfigure(1, weight=1)
@@ -972,7 +1031,7 @@ class JavisApp:
             row=2, column=0, sticky="ew"
         )
 
-        triage_frame = ttk.LabelFrame(strategy_bottom, text="Triage / Re-entry Bridge", padding=12)
+        triage_frame = ttk.LabelFrame(strategy_bottom, text="Triage / Re-entry Bridge", padding=12, style="DeckCard.TLabelframe")
         triage_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
         triage_frame.columnconfigure(0, weight=1)
         triage_frame.rowconfigure(1, weight=1)
@@ -989,7 +1048,7 @@ class JavisApp:
             row=2, column=0, sticky="ew"
         )
 
-        matrix_frame = ttk.LabelFrame(strategy_bottom, text="Safety Guard / Native vs Fallback", padding=12)
+        matrix_frame = ttk.LabelFrame(strategy_bottom, text="Safety Guard / Native vs Fallback", padding=12, style="DeckCard.TLabelframe")
         matrix_frame.grid(row=1, column=1, sticky="nsew")
         matrix_frame.columnconfigure(0, weight=1)
         matrix_frame.rowconfigure(1, weight=1)
@@ -1006,7 +1065,7 @@ class JavisApp:
             row=2, column=0, sticky="ew"
         )
 
-        deep_integration_frame = ttk.LabelFrame(codex_strategy_section, text="Deep Integration", padding=12)
+        deep_integration_frame = ttk.LabelFrame(codex_strategy_section, text="Deep Integration", padding=12, style="DeckCard.TLabelframe")
         deep_integration_frame.grid(row=7, column=0, sticky="nsew", pady=(12, 0))
         deep_integration_frame.columnconfigure(0, weight=1)
         deep_integration_frame.rowconfigure(3, weight=1)
@@ -1173,7 +1232,7 @@ class JavisApp:
         self.deep_handoff_note = ScrolledText(deep_notes_frame, height=10, wrap="word")
         self.deep_handoff_note.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
 
-        live_ops_frame = ttk.LabelFrame(codex_strategy_section, text="라이브 오퍼레이션", padding=12)
+        live_ops_frame = ttk.LabelFrame(codex_strategy_section, text="라이브 오퍼레이션", padding=12, style="AccentCard.TLabelframe")
         live_ops_frame.grid(row=8, column=0, sticky="nsew", pady=(12, 0))
         live_ops_frame.columnconfigure(0, weight=1)
         live_ops_frame.rowconfigure(3, weight=1)
@@ -2152,10 +2211,11 @@ class JavisApp:
         button = ttk.Button(
             self.control_nav,
             text=label,
+            style="RailNav.TButton",
             command=lambda current=section_id: self._select_control_center_section(current),
         )
         button.pack(fill="x", pady=(0, 8))
-        frame = ttk.Frame(self.control_content, padding=4)
+        frame = ttk.Frame(self.control_content, padding=6, style="DeckRoot.TFrame")
         frame.grid(row=0, column=0, sticky="nsew")
         self.control_nav_buttons[section_id] = button
         self.control_section_frames[section_id] = frame
@@ -2172,7 +2232,7 @@ class JavisApp:
 
         for current_id, button in self.control_nav_buttons.items():
             label = self.control_section_labels[current_id]
-            button.configure(text=f"• {label}" if current_id == section_id else label)
+            button.configure(text=label, style="RailNavActive.TButton" if current_id == section_id else "RailNav.TButton")
 
     def _refresh_control_center_header(self) -> None:
         project_label = self.session.project.project_summary or self.session.project.target_outcome or "프로젝트 정보 미입력"
@@ -3459,9 +3519,9 @@ class JavisApp:
         center_width = self.control_center.winfo_width()
         center_height = self.control_center.winfo_height()
         if center_width <= 1:
-            center_width = 1280
+            center_width = 1320
         if center_height <= 1:
-            center_height = 940
+            center_height = 960
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         center_width = min(center_width, max(screen_width - 40, 320))
