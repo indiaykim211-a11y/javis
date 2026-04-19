@@ -4,6 +4,7 @@ import json
 import queue
 import threading
 import time
+import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import BooleanVar, END, LEFT, StringVar, TclError, Tk, Toplevel, messagebox
 from tkinter import ttk
@@ -13,7 +14,12 @@ from app.automation.windows_ui import WindowRect, WindowResolution, WindowsDeskt
 from app.models import (
     CODEX_AUTOMATION_MODE_OPTIONS,
     CODEX_AUTOMATION_PRESETS,
+    DEEP_INTEGRATION_MODE_OPTIONS,
+    DEEP_INTEGRATION_READINESS_OPTIONS,
     JUDGMENT_ENGINE_MODE_OPTIONS,
+    LIVE_OPS_PROFILE_OPTIONS,
+    LIVE_OPS_REENTRY_OPTIONS,
+    LIVE_OPS_REPORT_CADENCE_OPTIONS,
     POLICY_SECTION_SPECS,
     VISUAL_CAPTURE_SCOPE_OPTIONS,
     VISUAL_RETENTION_OPTIONS,
@@ -25,6 +31,8 @@ from app.models import (
     StepQueueItem,
     SurfaceStateModel,
     get_codex_automation_mode_option,
+    get_deep_integration_mode_option,
+    get_live_ops_profile_option,
 )
 from app.services.workflow import AutomationEngine
 from app.state import SessionStore
@@ -34,15 +42,17 @@ class JavisApp:
     def __init__(self, root: Tk, workspace: Path) -> None:
         self.root = root
         self.root.title("javis")
-        self._popup_expanded_size = (432, 388)
-        self._popup_compact_size = (388, 248)
+        self._popup_expanded_size = (504, 520)
+        self._popup_compact_size = (420, 292)
         self.root.geometry(f"{self._popup_expanded_size[0]}x{self._popup_expanded_size[1]}")
-        self.root.minsize(360, 230)
+        self.root.minsize(392, 250)
         self.root.protocol("WM_DELETE_WINDOW", self._close_application)
         try:
             self.root.attributes("-topmost", True)
         except TclError:
             pass
+
+        self._configure_design_system()
 
         self.store = SessionStore(workspace)
         persisted = self.store.load()
@@ -72,6 +82,14 @@ class JavisApp:
         self._current_automation_runboard = ""
         self._current_triage_bridge = ""
         self._current_native_fallback_matrix = ""
+        self._current_deep_integration_registry = ""
+        self._current_deep_integration_handoff = ""
+        self._current_deep_integration_observability = ""
+        self._current_live_ops_charter = ""
+        self._current_live_ops_launchpad = ""
+        self._current_live_ops_reentry_brief = ""
+        self._current_live_ops_recovery = ""
+        self._current_live_ops_shift_brief = ""
         self._current_judgment_packet = ""
         self._current_judgment_prompt = ""
         self._current_judgment_response = ""
@@ -98,20 +116,193 @@ class JavisApp:
         if self.last_saved_at:
             self._log(f"저장된 세션을 복원했습니다. 마지막 저장 시각은 {self.last_saved_at.replace('T', ' ')} 입니다.")
 
+    def _pick_font_family(self, *candidates: str) -> str:
+        families = set(tkfont.families(self.root))
+        for candidate in candidates:
+            if candidate in families:
+                return candidate
+        return "TkDefaultFont"
+
+    def _configure_design_system(self) -> None:
+        self._font_body = self._pick_font_family("맑은 고딕", "Malgun Gothic", "Segoe UI", "Arial")
+        self._font_display = self._pick_font_family("Segoe UI", "맑은 고딕", "Malgun Gothic", "Arial")
+        self._palette = {
+            "bg": "#07111b",
+            "panel": "#0c1b2a",
+            "panel_soft": "#112538",
+            "panel_alt": "#142f46",
+            "line": "#17364f",
+            "line_strong": "#1ea7d7",
+            "accent": "#6ce8ff",
+            "accent_soft": "#3cc7f4",
+            "text": "#effaff",
+            "muted": "#95b8c8",
+            "success": "#67f0c2",
+            "warning": "#ffd071",
+            "danger": "#ff8f8f",
+        }
+        self.root.configure(background=self._palette["bg"])
+        self.root.option_add("*TCombobox*Listbox.font", (self._font_body, 10))
+        self.root.option_add("*TCombobox*Listbox.background", self._palette["panel"])
+        self.root.option_add("*TCombobox*Listbox.foreground", self._palette["text"])
+        self.root.option_add("*TCombobox*Listbox.selectBackground", self._palette["line_strong"])
+        self.root.option_add("*TCombobox*Listbox.selectForeground", self._palette["bg"])
+
     def _build_styles(self) -> None:
         style = ttk.Style()
-        if "vista" in style.theme_names():
-            style.theme_use("vista")
-        style.configure("PopupShell.TFrame", padding=18)
-        style.configure("PopupTitle.TLabel", font=("Segoe UI Semibold", 16))
-        style.configure("PopupProject.TLabel", font=("Segoe UI", 9))
-        style.configure("PopupBadge.TLabel", font=("Segoe UI Semibold", 9))
-        style.configure("PopupHeadline.TLabel", font=("Segoe UI Semibold", 13))
-        style.configure("PopupBody.TLabel", font=("Segoe UI", 10))
-        style.configure("PopupMeta.TLabel", font=("Segoe UI", 9))
-        style.configure("PopupSection.TLabel", font=("Segoe UI Semibold", 9))
-        style.configure("PopupPrimary.TButton", padding=(10, 8))
-        style.configure("PopupSecondary.TButton", padding=(10, 8))
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
+
+        bg = self._palette["bg"]
+        panel = self._palette["panel"]
+        panel_soft = self._palette["panel_soft"]
+        panel_alt = self._palette["panel_alt"]
+        line = self._palette["line"]
+        line_strong = self._palette["line_strong"]
+        accent = self._palette["accent"]
+        accent_soft = self._palette["accent_soft"]
+        text = self._palette["text"]
+        muted = self._palette["muted"]
+
+        style.configure(".", background=bg, foreground=text)
+        style.configure("TFrame", background=bg)
+        style.configure("TLabel", background=bg, foreground=text, font=(self._font_body, 10))
+        style.configure("TLabelframe", background=bg, foreground=accent, borderwidth=1, relief="solid")
+        style.configure("TLabelframe.Label", background=bg, foreground=accent, font=(self._font_body, 10, "bold"))
+        style.configure(
+            "TButton",
+            background=panel,
+            foreground=text,
+            bordercolor=line,
+            focuscolor=line_strong,
+            lightcolor=line,
+            darkcolor=line,
+            padding=(10, 8),
+            font=(self._font_body, 10),
+        )
+        style.map(
+            "TButton",
+            background=[("disabled", panel_soft), ("pressed", panel_soft), ("active", line)],
+            foreground=[("disabled", muted), ("pressed", text), ("active", text)],
+            bordercolor=[("active", line_strong)],
+        )
+        style.configure(
+            "TEntry",
+            fieldbackground=panel,
+            foreground=text,
+            insertcolor=accent,
+            bordercolor=line,
+            lightcolor=line,
+            darkcolor=line,
+            padding=6,
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground=panel,
+            background=panel,
+            foreground=text,
+            arrowcolor=accent,
+            bordercolor=line,
+            lightcolor=line,
+            darkcolor=line,
+            padding=6,
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", panel)],
+            background=[("readonly", panel)],
+            foreground=[("readonly", text)],
+            arrowcolor=[("readonly", accent), ("active", accent_soft)],
+        )
+        style.configure("TCheckbutton", background=bg, foreground=text, font=(self._font_body, 10))
+        style.map("TCheckbutton", background=[("active", bg)], foreground=[("disabled", muted)])
+        style.configure("TNotebook", background=bg, borderwidth=0, tabmargins=(0, 0, 0, 0))
+        style.configure(
+            "TNotebook.Tab",
+            background=panel,
+            foreground=muted,
+            padding=(12, 8),
+            font=(self._font_body, 10, "bold"),
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", panel_soft), ("active", panel_alt)],
+            foreground=[("selected", accent), ("active", text)],
+        )
+        style.configure("Horizontal.TSeparator", background=line)
+
+        style.configure("PopupShell.TFrame", background=bg, padding=22)
+        style.configure("PopupTitle.TLabel", background=bg, foreground=accent, font=(self._font_display, 18, "bold"))
+        style.configure("PopupProject.TLabel", background=bg, foreground=muted, font=(self._font_body, 9))
+        style.configure(
+            "PopupBadge.TLabel",
+            background=panel_soft,
+            foreground=accent,
+            font=(self._font_body, 9, "bold"),
+            padding=(10, 4),
+            borderwidth=1,
+            relief="solid",
+        )
+        style.configure("PopupHeadline.TLabel", background=bg, foreground=text, font=(self._font_body, 15, "bold"))
+        style.configure("PopupBody.TLabel", background=bg, foreground=text, font=(self._font_body, 10))
+        style.configure("PopupMeta.TLabel", background=bg, foreground=muted, font=(self._font_body, 9))
+        style.configure("PopupSection.TLabel", background=bg, foreground=accent_soft, font=(self._font_body, 9, "bold"))
+        style.configure(
+            "PopupPrimary.TButton",
+            background=accent_soft,
+            foreground=bg,
+            bordercolor=accent_soft,
+            focuscolor=accent,
+            lightcolor=accent_soft,
+            darkcolor=accent_soft,
+            padding=(12, 10),
+            font=(self._font_body, 10, "bold"),
+        )
+        style.map(
+            "PopupPrimary.TButton",
+            background=[("disabled", panel_soft), ("pressed", accent), ("active", accent)],
+            foreground=[("disabled", muted), ("pressed", bg), ("active", bg)],
+            bordercolor=[("active", accent)],
+        )
+        style.configure(
+            "PopupSecondary.TButton",
+            background=panel,
+            foreground=text,
+            bordercolor=line,
+            focuscolor=line_strong,
+            lightcolor=line,
+            darkcolor=line,
+            padding=(12, 10),
+            font=(self._font_body, 10),
+        )
+        style.map(
+            "PopupSecondary.TButton",
+            background=[("disabled", panel_soft), ("pressed", panel_soft), ("active", line)],
+            foreground=[("disabled", muted), ("pressed", text), ("active", text)],
+            bordercolor=[("active", line_strong)],
+        )
+
+    def _apply_text_widget_theme(self, widget) -> None:
+        if isinstance(widget, ScrolledText):
+            state = str(widget.cget("state"))
+            is_readonly = state == "disabled"
+            widget.configure(
+                font=(self._font_body, 10),
+                background=self._palette["panel_soft"] if is_readonly else self._palette["panel"],
+                foreground=self._palette["text"],
+                insertbackground=self._palette["accent"],
+                selectbackground=self._palette["line_strong"],
+                selectforeground=self._palette["bg"],
+                relief="flat",
+                borderwidth=1,
+                highlightthickness=1,
+                highlightbackground=self._palette["line"],
+                highlightcolor=self._palette["line_strong"],
+                padx=10,
+                pady=10,
+            )
+        for child in widget.winfo_children():
+            self._apply_text_widget_theme(child)
 
     def _build_popup_shell(self) -> None:
         self.root.columnconfigure(0, weight=1)
@@ -142,7 +333,7 @@ class JavisApp:
 
         title_block = ttk.Frame(header)
         title_block.grid(row=0, column=0, sticky="w")
-        ttk.Label(title_block, text="javis", style="PopupTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(title_block, text="JAVIS // Live Ops", style="PopupTitle.TLabel").grid(row=0, column=0, sticky="w")
         self.popup_project_label = ttk.Label(title_block, textvariable=self.popup_project_var, style="PopupProject.TLabel")
         self.popup_project_label.grid(
             row=1, column=0, sticky="w", pady=(2, 0)
@@ -267,11 +458,13 @@ class JavisApp:
 
     def _build_control_center(self) -> None:
         self.control_center = Toplevel(self.root)
-        self.control_center.title("javis Control Center")
+        self.control_center.title("JAVIS // Control Deck")
         self.control_center.geometry("1280x940")
+        self.control_center.configure(background=self._palette["bg"])
         self.control_center.transient(self.root)
         self.control_center.protocol("WM_DELETE_WINDOW", self.hide_control_center)
         self._build_control_center_layout(self.control_center)
+        self._apply_text_widget_theme(self.control_center)
 
     def _build_control_center_layout(self, parent: Toplevel) -> None:
         parent.columnconfigure(1, weight=1)
@@ -287,6 +480,16 @@ class JavisApp:
         self.codex_strategy_label_by_id: dict[str, str] = {}
         self.codex_mode_choice_by_label: dict[str, str] = {}
         self.codex_mode_label_by_id: dict[str, str] = {}
+        self.deep_integration_mode_choice_by_label: dict[str, str] = {}
+        self.deep_integration_mode_label_by_id: dict[str, str] = {}
+        self.deep_integration_readiness_choice_by_label: dict[str, str] = {}
+        self.deep_integration_readiness_label_by_id: dict[str, str] = {}
+        self.live_ops_profile_choice_by_label: dict[str, str] = {}
+        self.live_ops_profile_label_by_id: dict[str, str] = {}
+        self.live_ops_report_choice_by_label: dict[str, str] = {}
+        self.live_ops_report_label_by_id: dict[str, str] = {}
+        self.live_ops_reentry_choice_by_label: dict[str, str] = {}
+        self.live_ops_reentry_label_by_id: dict[str, str] = {}
         self.judgment_mode_choice_by_label: dict[str, str] = {}
         self.judgment_mode_label_by_id: dict[str, str] = {}
         self.visual_target_choice_by_label: dict[str, str] = {}
@@ -302,7 +505,7 @@ class JavisApp:
 
         title_block = ttk.Frame(header)
         title_block.grid(row=0, column=0, sticky="w")
-        ttk.Label(title_block, text="Control Center", style="PopupTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(title_block, text="JAVIS // Control Deck", style="PopupTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             title_block,
             textvariable=self.control_header_project_var,
@@ -539,6 +742,8 @@ class JavisApp:
 
         codex_strategy_section.columnconfigure(0, weight=1)
         codex_strategy_section.rowconfigure(5, weight=1)
+        codex_strategy_section.rowconfigure(7, weight=1)
+        codex_strategy_section.rowconfigure(8, weight=1)
 
         strategy_intro = ttk.LabelFrame(codex_strategy_section, text="Codex-first 안내", padding=12)
         strategy_intro.grid(row=0, column=0, sticky="ew")
@@ -800,6 +1005,349 @@ class JavisApp:
         ttk.Button(matrix_frame, text="안전 가드 복사", command=self.copy_native_fallback_matrix).grid(
             row=2, column=0, sticky="ew"
         )
+
+        deep_integration_frame = ttk.LabelFrame(codex_strategy_section, text="Deep Integration", padding=12)
+        deep_integration_frame.grid(row=7, column=0, sticky="nsew", pady=(12, 0))
+        deep_integration_frame.columnconfigure(0, weight=1)
+        deep_integration_frame.rowconfigure(3, weight=1)
+
+        deep_controls = ttk.Frame(deep_integration_frame)
+        deep_controls.grid(row=0, column=0, sticky="ew")
+        deep_controls.columnconfigure(1, weight=1)
+        deep_controls.columnconfigure(3, weight=1)
+
+        self.deep_integration_mode_var = StringVar()
+        for option in DEEP_INTEGRATION_MODE_OPTIONS:
+            self.deep_integration_mode_choice_by_label[option.title] = option.mode_id
+            self.deep_integration_mode_label_by_id[option.mode_id] = option.title
+
+        self.deep_app_server_readiness_var = StringVar()
+        self.deep_cloud_trigger_readiness_var = StringVar()
+        for option in DEEP_INTEGRATION_READINESS_OPTIONS:
+            self.deep_integration_readiness_choice_by_label[option.title] = option.readiness_id
+            self.deep_integration_readiness_label_by_id[option.readiness_id] = option.title
+
+        self.deep_fallback_allowed_var = BooleanVar(value=self.session.deep_integration.desktop_fallback_allowed)
+        self.deep_app_server_notes_var = StringVar(value=self.session.deep_integration.app_server_notes)
+        self.deep_cloud_trigger_notes_var = StringVar(value=self.session.deep_integration.cloud_trigger_notes)
+
+        ttk.Label(deep_controls, text="integration mode").grid(row=0, column=0, sticky="w", padx=(0, 12))
+        self.deep_integration_mode_combo = ttk.Combobox(
+            deep_controls,
+            textvariable=self.deep_integration_mode_var,
+            state="readonly",
+            values=list(self.deep_integration_mode_choice_by_label.keys()),
+        )
+        self.deep_integration_mode_combo.grid(row=0, column=1, sticky="ew")
+        self.deep_integration_mode_combo.bind("<<ComboboxSelected>>", self._on_deep_integration_settings_changed)
+
+        ttk.Label(deep_controls, text="App Server readiness").grid(row=0, column=2, sticky="w", padx=(16, 12))
+        self.deep_app_server_readiness_combo = ttk.Combobox(
+            deep_controls,
+            textvariable=self.deep_app_server_readiness_var,
+            state="readonly",
+            values=list(self.deep_integration_readiness_choice_by_label.keys()),
+        )
+        self.deep_app_server_readiness_combo.grid(row=0, column=3, sticky="ew")
+        self.deep_app_server_readiness_combo.bind("<<ComboboxSelected>>", self._on_deep_integration_settings_changed)
+
+        ttk.Label(deep_controls, text="Cloud Trigger readiness").grid(row=1, column=0, sticky="w", padx=(0, 12), pady=(10, 0))
+        self.deep_cloud_trigger_readiness_combo = ttk.Combobox(
+            deep_controls,
+            textvariable=self.deep_cloud_trigger_readiness_var,
+            state="readonly",
+            values=list(self.deep_integration_readiness_choice_by_label.keys()),
+        )
+        self.deep_cloud_trigger_readiness_combo.grid(row=1, column=1, sticky="ew", pady=(10, 0))
+        self.deep_cloud_trigger_readiness_combo.bind("<<ComboboxSelected>>", self._on_deep_integration_settings_changed)
+
+        ttk.Label(deep_controls, text="App Server 메모").grid(row=1, column=2, sticky="w", padx=(16, 12), pady=(10, 0))
+        ttk.Entry(deep_controls, textvariable=self.deep_app_server_notes_var).grid(row=1, column=3, sticky="ew", pady=(10, 0))
+
+        ttk.Label(deep_controls, text="Cloud 메모").grid(row=2, column=0, sticky="w", padx=(0, 12), pady=(10, 0))
+        ttk.Entry(deep_controls, textvariable=self.deep_cloud_trigger_notes_var).grid(row=2, column=1, sticky="ew", pady=(10, 0))
+        ttk.Checkbutton(
+            deep_controls,
+            text="desktop fallback 허용",
+            variable=self.deep_fallback_allowed_var,
+            command=self._on_deep_integration_settings_changed,
+        ).grid(row=2, column=2, columnspan=2, sticky="w", pady=(10, 0))
+
+        deep_actions = ttk.Frame(deep_integration_frame)
+        deep_actions.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        for index, (label, command) in enumerate(
+            [
+                ("Deep 새로고침", self.refresh_deep_integration_panel_now),
+                ("Capability 복사", self.copy_deep_integration_registry),
+                ("Handoff 복사", self.copy_deep_integration_handoff),
+                ("Observability 복사", self.copy_deep_integration_observability),
+            ]
+        ):
+            ttk.Button(deep_actions, text=label, command=command).grid(
+                row=0,
+                column=index,
+                sticky="ew",
+                padx=(0, 8 if index < 3 else 0),
+            )
+            deep_actions.columnconfigure(index, weight=1)
+
+        self.deep_integration_mode_status_var = StringVar(value="deep integration 추천 mode가 여기에 표시됩니다.")
+        self.deep_integration_supervisor_var = StringVar(value="supervisor state가 여기에 표시됩니다.")
+        self.deep_integration_fallback_var = StringVar(value="fallback 상태가 여기에 표시됩니다.")
+        self.deep_integration_reentry_var = StringVar(value="handoff target과 re-entry source가 여기에 표시됩니다.")
+
+        deep_status = ttk.LabelFrame(deep_integration_frame, text="현재 Deep Integration 상태", padding=12)
+        deep_status.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        deep_status.columnconfigure(0, weight=1)
+        ttk.Label(deep_status, textvariable=self.deep_integration_mode_status_var, wraplength=760, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(deep_status, textvariable=self.deep_integration_supervisor_var, wraplength=760, justify="left").grid(
+            row=1, column=0, sticky="w", pady=(4, 0)
+        )
+        ttk.Label(deep_status, textvariable=self.deep_integration_fallback_var, wraplength=760, justify="left").grid(
+            row=2, column=0, sticky="w", pady=(4, 0)
+        )
+        ttk.Label(deep_status, textvariable=self.deep_integration_reentry_var, wraplength=760, justify="left").grid(
+            row=3, column=0, sticky="w", pady=(4, 0)
+        )
+
+        deep_body = ttk.Frame(deep_integration_frame)
+        deep_body.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        deep_body.columnconfigure(0, weight=1)
+        deep_body.columnconfigure(1, weight=1)
+        deep_body.rowconfigure(0, weight=1)
+        deep_body.rowconfigure(1, weight=1)
+
+        deep_registry_frame = ttk.LabelFrame(deep_body, text="Capability Registry", padding=12)
+        deep_registry_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=(0, 8))
+        deep_registry_frame.columnconfigure(0, weight=1)
+        deep_registry_frame.rowconfigure(1, weight=1)
+        self.deep_integration_registry_state_var = StringVar(value="현재 환경의 capability registry가 여기에 표시됩니다.")
+        ttk.Label(deep_registry_frame, textvariable=self.deep_integration_registry_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.deep_integration_registry_preview = ScrolledText(deep_registry_frame, height=10, wrap="word", state="disabled")
+        self.deep_integration_registry_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        deep_observability_frame = ttk.LabelFrame(deep_body, text="Integration Observability", padding=12)
+        deep_observability_frame.grid(row=0, column=1, sticky="nsew", pady=(0, 8))
+        deep_observability_frame.columnconfigure(0, weight=1)
+        deep_observability_frame.rowconfigure(1, weight=1)
+        self.deep_integration_observability_state_var = StringVar(value="현재 mode, supervisor, fallback 상태가 여기에 표시됩니다.")
+        ttk.Label(
+            deep_observability_frame,
+            textvariable=self.deep_integration_observability_state_var,
+            wraplength=360,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+        self.deep_integration_observability_preview = ScrolledText(
+            deep_observability_frame,
+            height=10,
+            wrap="word",
+            state="disabled",
+        )
+        self.deep_integration_observability_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        deep_handoff_frame = ttk.LabelFrame(deep_body, text="Cross-Surface Handoff", padding=12)
+        deep_handoff_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
+        deep_handoff_frame.columnconfigure(0, weight=1)
+        deep_handoff_frame.rowconfigure(1, weight=1)
+        self.deep_integration_handoff_state_var = StringVar(value="popup / Control Center / triage / voice를 잇는 handoff bundle이 여기에 표시됩니다.")
+        ttk.Label(deep_handoff_frame, textvariable=self.deep_integration_handoff_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.deep_integration_handoff_preview = ScrolledText(deep_handoff_frame, height=10, wrap="word", state="disabled")
+        self.deep_integration_handoff_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        deep_notes_frame = ttk.LabelFrame(deep_body, text="Handoff Notes", padding=12)
+        deep_notes_frame.grid(row=1, column=1, sticky="nsew")
+        deep_notes_frame.columnconfigure(0, weight=1)
+        deep_notes_frame.rowconfigure(1, weight=1)
+        ttk.Label(
+            deep_notes_frame,
+            text="App Server, cloud trigger, fallback 진입/해제 기준에 대한 운영 메모를 적어둘 수 있습니다.",
+            wraplength=360,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+        self.deep_handoff_note = ScrolledText(deep_notes_frame, height=10, wrap="word")
+        self.deep_handoff_note.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        live_ops_frame = ttk.LabelFrame(codex_strategy_section, text="라이브 오퍼레이션", padding=12)
+        live_ops_frame.grid(row=8, column=0, sticky="nsew", pady=(12, 0))
+        live_ops_frame.columnconfigure(0, weight=1)
+        live_ops_frame.rowconfigure(3, weight=1)
+
+        live_controls = ttk.Frame(live_ops_frame)
+        live_controls.grid(row=0, column=0, sticky="ew")
+        live_controls.columnconfigure(1, weight=1)
+        live_controls.columnconfigure(3, weight=1)
+
+        self.live_ops_profile_var = StringVar()
+        for option in LIVE_OPS_PROFILE_OPTIONS:
+            self.live_ops_profile_choice_by_label[option.title] = option.profile_id
+            self.live_ops_profile_label_by_id[option.profile_id] = option.title
+
+        self.live_ops_report_var = StringVar()
+        for option in LIVE_OPS_REPORT_CADENCE_OPTIONS:
+            self.live_ops_report_choice_by_label[option.title] = option.cadence_id
+            self.live_ops_report_label_by_id[option.cadence_id] = option.title
+
+        self.live_ops_reentry_var = StringVar()
+        for option in LIVE_OPS_REENTRY_OPTIONS:
+            self.live_ops_reentry_choice_by_label[option.title] = option.reentry_id
+            self.live_ops_reentry_label_by_id[option.reentry_id] = option.title
+
+        self.live_ops_max_steps_var = StringVar(value=str(self.session.live_ops.max_unattended_steps))
+
+        ttk.Label(live_controls, text="운영 프로필").grid(row=0, column=0, sticky="w", padx=(0, 12))
+        self.live_ops_profile_combo = ttk.Combobox(
+            live_controls,
+            textvariable=self.live_ops_profile_var,
+            state="readonly",
+            values=list(self.live_ops_profile_choice_by_label.keys()),
+        )
+        self.live_ops_profile_combo.grid(row=0, column=1, sticky="ew")
+        self.live_ops_profile_combo.bind("<<ComboboxSelected>>", self._on_live_ops_settings_changed)
+
+        ttk.Label(live_controls, text="보고 주기").grid(row=0, column=2, sticky="w", padx=(16, 12))
+        self.live_ops_report_combo = ttk.Combobox(
+            live_controls,
+            textvariable=self.live_ops_report_var,
+            state="readonly",
+            values=list(self.live_ops_report_choice_by_label.keys()),
+        )
+        self.live_ops_report_combo.grid(row=0, column=3, sticky="ew")
+        self.live_ops_report_combo.bind("<<ComboboxSelected>>", self._on_live_ops_settings_changed)
+
+        ttk.Label(live_controls, text="재진입 방식").grid(row=1, column=0, sticky="w", padx=(0, 12), pady=(10, 0))
+        self.live_ops_reentry_combo = ttk.Combobox(
+            live_controls,
+            textvariable=self.live_ops_reentry_var,
+            state="readonly",
+            values=list(self.live_ops_reentry_choice_by_label.keys()),
+        )
+        self.live_ops_reentry_combo.grid(row=1, column=1, sticky="ew", pady=(10, 0))
+        self.live_ops_reentry_combo.bind("<<ComboboxSelected>>", self._on_live_ops_settings_changed)
+
+        ttk.Label(live_controls, text="무인 진행 단계 수").grid(row=1, column=2, sticky="w", padx=(16, 12), pady=(10, 0))
+        ttk.Entry(live_controls, textvariable=self.live_ops_max_steps_var).grid(row=1, column=3, sticky="ew", pady=(10, 0))
+
+        live_actions = ttk.Frame(live_ops_frame)
+        live_actions.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        for index, (label, command) in enumerate(
+            [
+                ("운영 새로고침", self.refresh_live_ops_panel_now),
+                ("차터 복사", self.copy_live_ops_charter),
+                ("재진입 복사", self.copy_live_ops_reentry_brief),
+                ("복구안 복사", self.copy_live_ops_recovery),
+                ("브리프 복사", self.copy_live_ops_shift_brief),
+            ]
+        ):
+            ttk.Button(live_actions, text=label, command=command).grid(
+                row=0,
+                column=index,
+                sticky="ew",
+                padx=(0, 8 if index < 4 else 0),
+            )
+            live_actions.columnconfigure(index, weight=1)
+
+        self.live_ops_profile_status_var = StringVar(value="운영 프로필과 보고 주기 상태가 여기에 표시됩니다.")
+        self.live_ops_lane_status_var = StringVar(value="현재 운영 레인이 여기에 표시됩니다.")
+        self.live_ops_touchpoint_var = StringVar(value="다음 터치포인트가 여기에 표시됩니다.")
+        self.live_ops_recovery_status_var = StringVar(value="현재 복구 수준과 이유가 여기에 표시됩니다.")
+
+        live_status = ttk.LabelFrame(live_ops_frame, text="현재 운영 상태", padding=12)
+        live_status.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        live_status.columnconfigure(0, weight=1)
+        ttk.Label(live_status, textvariable=self.live_ops_profile_status_var, wraplength=760, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(live_status, textvariable=self.live_ops_lane_status_var, wraplength=760, justify="left").grid(
+            row=1, column=0, sticky="w", pady=(4, 0)
+        )
+        ttk.Label(live_status, textvariable=self.live_ops_touchpoint_var, wraplength=760, justify="left").grid(
+            row=2, column=0, sticky="w", pady=(4, 0)
+        )
+        ttk.Label(live_status, textvariable=self.live_ops_recovery_status_var, wraplength=760, justify="left").grid(
+            row=3, column=0, sticky="w", pady=(4, 0)
+        )
+
+        live_body = ttk.Frame(live_ops_frame)
+        live_body.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        live_body.columnconfigure(0, weight=1)
+        live_body.columnconfigure(1, weight=1)
+        live_body.rowconfigure(0, weight=1)
+        live_body.rowconfigure(1, weight=1)
+        live_body.rowconfigure(2, weight=1)
+
+        live_charter_frame = ttk.LabelFrame(live_body, text="운영 차터", padding=12)
+        live_charter_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=(0, 8))
+        live_charter_frame.columnconfigure(0, weight=1)
+        live_charter_frame.rowconfigure(1, weight=1)
+        self.live_ops_charter_state_var = StringVar(value="운영 원칙과 감독 가드가 여기에 표시됩니다.")
+        ttk.Label(live_charter_frame, textvariable=self.live_ops_charter_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.live_ops_charter_preview = ScrolledText(live_charter_frame, height=10, wrap="word", state="disabled")
+        self.live_ops_charter_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        live_launchpad_frame = ttk.LabelFrame(live_body, text="런치패드", padding=12)
+        live_launchpad_frame.grid(row=0, column=1, sticky="nsew", pady=(0, 8))
+        live_launchpad_frame.columnconfigure(0, weight=1)
+        live_launchpad_frame.rowconfigure(1, weight=1)
+        self.live_ops_launchpad_state_var = StringVar(value="지금 확인할 체크리스트와 즉시 행동이 여기에 표시됩니다.")
+        ttk.Label(live_launchpad_frame, textvariable=self.live_ops_launchpad_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.live_ops_launchpad_preview = ScrolledText(live_launchpad_frame, height=10, wrap="word", state="disabled")
+        self.live_ops_launchpad_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        live_reentry_frame = ttk.LabelFrame(live_body, text="재진입 브리프", padding=12)
+        live_reentry_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8), pady=(0, 8))
+        live_reentry_frame.columnconfigure(0, weight=1)
+        live_reentry_frame.rowconfigure(1, weight=1)
+        self.live_ops_reentry_state_var = StringVar(value="현재 결과를 다시 읽고 운영 스레드로 들어오는 기준이 여기에 표시됩니다.")
+        ttk.Label(live_reentry_frame, textvariable=self.live_ops_reentry_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.live_ops_reentry_preview = ScrolledText(live_reentry_frame, height=10, wrap="word", state="disabled")
+        self.live_ops_reentry_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        live_recovery_frame = ttk.LabelFrame(live_body, text="복구 플레이북", padding=12)
+        live_recovery_frame.grid(row=1, column=1, sticky="nsew", pady=(0, 8))
+        live_recovery_frame.columnconfigure(0, weight=1)
+        live_recovery_frame.rowconfigure(1, weight=1)
+        self.live_ops_recovery_state_var = StringVar(value="막혔을 때 어떤 수준으로 복구할지 여기에 표시됩니다.")
+        ttk.Label(live_recovery_frame, textvariable=self.live_ops_recovery_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.live_ops_recovery_preview = ScrolledText(live_recovery_frame, height=10, wrap="word", state="disabled")
+        self.live_ops_recovery_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        live_shift_frame = ttk.LabelFrame(live_body, text="시프트 브리프", padding=12)
+        live_shift_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 8))
+        live_shift_frame.columnconfigure(0, weight=1)
+        live_shift_frame.rowconfigure(1, weight=1)
+        self.live_ops_shift_state_var = StringVar(value="현재 운영 상태를 운영자 시점으로 짧게 요약해 보여줍니다.")
+        ttk.Label(live_shift_frame, textvariable=self.live_ops_shift_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.live_ops_shift_preview = ScrolledText(live_shift_frame, height=10, wrap="word", state="disabled")
+        self.live_ops_shift_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        live_note_frame = ttk.LabelFrame(live_body, text="운영 메모", padding=12)
+        live_note_frame.grid(row=2, column=1, sticky="nsew")
+        live_note_frame.columnconfigure(0, weight=1)
+        live_note_frame.rowconfigure(1, weight=1)
+        ttk.Label(
+            live_note_frame,
+            text="실제 운영에서 꼭 지키고 싶은 감독 규칙이나 handoff 취향을 적어둘 수 있습니다.",
+            wraplength=360,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+        self.live_ops_note = ScrolledText(live_note_frame, height=10, wrap="word")
+        self.live_ops_note.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
 
         policy_section.columnconfigure(0, weight=1)
         policy_section.rowconfigure(2, weight=1)
@@ -1666,6 +2214,78 @@ class JavisApp:
             next(iter(self.codex_mode_choice_by_label.values()), ""),
         )
 
+    def _deep_integration_mode_label_for_id(self, mode_id: str) -> str:
+        return self.deep_integration_mode_label_by_id.get(
+            mode_id,
+            next(iter(self.deep_integration_mode_label_by_id.values()), ""),
+        )
+
+    def _current_deep_integration_mode_id(self) -> str:
+        label = self.deep_integration_mode_var.get().strip()
+        return self.deep_integration_mode_choice_by_label.get(
+            label,
+            next(iter(self.deep_integration_mode_choice_by_label.values()), ""),
+        )
+
+    def _deep_integration_readiness_label_for_id(self, readiness_id: str) -> str:
+        return self.deep_integration_readiness_label_by_id.get(
+            readiness_id,
+            next(iter(self.deep_integration_readiness_label_by_id.values()), ""),
+        )
+
+    def _current_app_server_readiness_id(self) -> str:
+        label = self.deep_app_server_readiness_var.get().strip()
+        return self.deep_integration_readiness_choice_by_label.get(
+            label,
+            next(iter(self.deep_integration_readiness_choice_by_label.values()), ""),
+        )
+
+    def _current_cloud_trigger_readiness_id(self) -> str:
+        label = self.deep_cloud_trigger_readiness_var.get().strip()
+        return self.deep_integration_readiness_choice_by_label.get(
+            label,
+            next(iter(self.deep_integration_readiness_choice_by_label.values()), ""),
+        )
+
+    def _live_ops_profile_label_for_id(self, profile_id: str) -> str:
+        return self.live_ops_profile_label_by_id.get(
+            profile_id,
+            next(iter(self.live_ops_profile_label_by_id.values()), ""),
+        )
+
+    def _current_live_ops_profile_id(self) -> str:
+        label = self.live_ops_profile_var.get().strip()
+        return self.live_ops_profile_choice_by_label.get(
+            label,
+            next(iter(self.live_ops_profile_choice_by_label.values()), ""),
+        )
+
+    def _live_ops_report_label_for_id(self, cadence_id: str) -> str:
+        return self.live_ops_report_label_by_id.get(
+            cadence_id,
+            next(iter(self.live_ops_report_label_by_id.values()), ""),
+        )
+
+    def _current_live_ops_report_id(self) -> str:
+        label = self.live_ops_report_var.get().strip()
+        return self.live_ops_report_choice_by_label.get(
+            label,
+            next(iter(self.live_ops_report_choice_by_label.values()), ""),
+        )
+
+    def _live_ops_reentry_label_for_id(self, reentry_id: str) -> str:
+        return self.live_ops_reentry_label_by_id.get(
+            reentry_id,
+            next(iter(self.live_ops_reentry_label_by_id.values()), ""),
+        )
+
+    def _current_live_ops_reentry_id(self) -> str:
+        label = self.live_ops_reentry_var.get().strip()
+        return self.live_ops_reentry_choice_by_label.get(
+            label,
+            next(iter(self.live_ops_reentry_choice_by_label.values()), ""),
+        )
+
     def _judgment_mode_label_for_id(self, mode_id: str) -> str:
         return self.judgment_mode_label_by_id.get(
             mode_id,
@@ -1773,13 +2393,13 @@ class JavisApp:
                 f"최근 판단: {result.decision} | {result.message_to_user or result.reason}"
             )
             self.judgment_source_status_var.set(
-                f"source {result.source or 'unknown'} | confidence {result.confidence:.2f} | risk {result.risk_level}"
+                f"출처 {result.source or '알 수 없음'} | 신뢰도 {result.confidence:.2f} | 위험 {result.risk_level}"
             )
             self.judgment_follow_up_var.set(f"후속 행동: {follow_up}")
             self.judgment_response_state_var.set("검증과 강등 규칙이 반영된 최종 판단 응답입니다.")
         else:
             self.judgment_result_status_var.set("아직 판단 결과가 없습니다. 재판단 실행으로 현재 상태를 점검할 수 있습니다.")
-            self.judgment_source_status_var.set("source / confidence / risk 정보는 판단 후에 표시됩니다.")
+            self.judgment_source_status_var.set("출처 / 신뢰도 / 위험 정보는 판단 후에 표시됩니다.")
             self.judgment_follow_up_var.set("후속 행동 요약은 판단 후에 표시됩니다.")
             self.judgment_response_state_var.set("아직 판단을 실행하지 않았습니다.")
 
@@ -2181,10 +2801,10 @@ class JavisApp:
             result = self.runtime.last_voice_result
             result_text = json.dumps(result.to_dict(), ensure_ascii=False, indent=2)
             self.voice_result_status_var.set(
-                f"최근 intent: {result.normalized_intent_id or 'unknown'} | action {result.action_status or 'none'} | confidence {result.intent_confidence:.2f}"
+                f"최근 의도: {result.normalized_intent_id or '알 수 없음'} | 동작 {result.action_status or '없음'} | 신뢰도 {result.intent_confidence:.2f}"
             )
             self.voice_capture_status_var.set(
-                f"voice capture: {self.runtime.voice_capture_state} | 마지막 transcript 길이 {len(result.transcript_text.strip())}자"
+                f"음성 캡처: {self.runtime.voice_capture_state} | 마지막 전사 길이 {len(result.transcript_text.strip())}자"
             )
             self.voice_result_state_var.set("최근 voice intent 결과와 action routing 상태입니다.")
         else:
@@ -2263,7 +2883,7 @@ class JavisApp:
 
             self._log(
                 "voice intent 처리: "
-                f"{result.normalized_intent_id or 'unknown'} -> {result.action_status or 'none'}"
+                f"{result.normalized_intent_id or '알 수 없음'} -> {result.action_status or '없음'}"
             )
             if result.clarification_question:
                 self._log(f"[voice clarify] {result.clarification_question}")
@@ -2393,9 +3013,9 @@ class JavisApp:
         )
         self.codex_strategy_summary_var.set(preset.summary)
         self.codex_strategy_type_var.set(f"프리셋 성격: {preset.automation_type}")
-        self.codex_strategy_mode_var.set(f"추천 mode: {recommended_option.title} | 실제 launch: {effective_option.title}")
-        self.codex_strategy_cadence_var.set(f"cadence: {decision.cadence_hint}")
-        self.codex_strategy_worktree_var.set(f"worktree: {decision.worktree_hint}")
+        self.codex_strategy_mode_var.set(f"추천 방식: {recommended_option.title} | 실제 실행: {effective_option.title}")
+        self.codex_strategy_cadence_var.set(f"실행 리듬: {decision.cadence_hint}")
+        self.codex_strategy_worktree_var.set(f"워크트리: {decision.worktree_hint}")
         self.codex_strategy_use_when_var.set(f"이럴 때 사용: {preset.use_when}")
         self.codex_strategy_codex_role_var.set(f"Codex 역할: {preset.codex_role}")
         self.codex_strategy_javis_role_var.set(f"javis 역할: {preset.javis_role}")
@@ -2440,6 +3060,8 @@ class JavisApp:
             "automation을 써야 할 때와 말아야 할 때, 그리고 fallback을 고려할 경계를 현재 전략 기준으로 같이 보여줍니다."
         )
         self._set_readonly_text(self.native_fallback_preview, matrix)
+        self._refresh_deep_integration_panel(active_session)
+        self._refresh_live_ops_panel(active_session)
 
     def _on_codex_strategy_selected(self, _event=None) -> None:
         self._refresh_codex_strategy_panel()
@@ -2524,6 +3146,242 @@ class JavisApp:
         except Exception as exc:
             messagebox.showerror("안전 가드 복사 실패", str(exc))
 
+    def _refresh_deep_integration_panel(self, session: SessionConfig | None = None) -> None:
+        active_session = session
+        if active_session is None:
+            try:
+                active_session = self._collect_session()
+            except Exception:
+                active_session = self.session
+
+        mode_label = self._deep_integration_mode_label_for_id(active_session.deep_integration.selected_mode_id)
+        if mode_label and self.deep_integration_mode_var.get() != mode_label:
+            self.deep_integration_mode_var.set(mode_label)
+        app_server_label = self._deep_integration_readiness_label_for_id(
+            active_session.deep_integration.app_server_readiness_id
+        )
+        if app_server_label and self.deep_app_server_readiness_var.get() != app_server_label:
+            self.deep_app_server_readiness_var.set(app_server_label)
+        cloud_label = self._deep_integration_readiness_label_for_id(
+            active_session.deep_integration.cloud_trigger_readiness_id
+        )
+        if cloud_label and self.deep_cloud_trigger_readiness_var.get() != cloud_label:
+            self.deep_cloud_trigger_readiness_var.set(cloud_label)
+        self.deep_fallback_allowed_var.set(active_session.deep_integration.desktop_fallback_allowed)
+        if self.deep_app_server_notes_var.get() != active_session.deep_integration.app_server_notes:
+            self.deep_app_server_notes_var.set(active_session.deep_integration.app_server_notes)
+        if self.deep_cloud_trigger_notes_var.get() != active_session.deep_integration.cloud_trigger_notes:
+            self.deep_cloud_trigger_notes_var.set(active_session.deep_integration.cloud_trigger_notes)
+
+        decision = self.engine.recommend_deep_integration_mode(active_session, self.runtime)
+        recommended_option = get_deep_integration_mode_option(decision.recommended_mode_id)
+        selected_option = active_session.deep_integration.selected_mode()
+        effective_option = get_deep_integration_mode_option(decision.effective_mode_id)
+
+        registry = self.engine.build_deep_integration_capability_registry(active_session, self.runtime)
+        handoff = self.engine.build_cross_surface_handoff_bundle(active_session, self.runtime)
+        observability = self.engine.build_integration_observability_report(active_session, self.runtime)
+
+        self._current_deep_integration_registry = registry
+        self._current_deep_integration_handoff = handoff
+        self._current_deep_integration_observability = observability
+
+        self.deep_integration_mode_status_var.set(
+            f"추천 방식: {recommended_option.title} | 현재 선택: {selected_option.title} | 실제 적용: {effective_option.title}"
+        )
+        self.deep_integration_supervisor_var.set(
+            f"감독 상태: {decision.supervisor_state} | {decision.supervisor_reason}"
+        )
+        self.deep_integration_fallback_var.set(
+            f"예외 경로: {decision.fallback_state} | {decision.fallback_reason}"
+        )
+        self.deep_integration_reentry_var.set(
+            f"handoff: {decision.handoff_target} | 재진입: {decision.reentry_source} | 다음 검토: {decision.next_review_point}"
+        )
+
+        self.deep_integration_registry_state_var.set(
+            "현재 Codex native / App Server / cloud trigger readiness를 capability registry로 정리해 보여줍니다."
+        )
+        self.deep_integration_observability_state_var.set(
+            "추천 mode, supervisor state, fallback boundary를 observability 리포트로 보여줍니다."
+        )
+        self.deep_integration_handoff_state_var.set(
+            "현재 프로젝트를 다음 surface로 넘길 때 필요한 handoff bundle을 보여줍니다."
+        )
+
+        self._set_readonly_text(self.deep_integration_registry_preview, registry)
+        self._set_readonly_text(self.deep_integration_observability_preview, observability)
+        self._set_readonly_text(self.deep_integration_handoff_preview, handoff)
+
+    def _on_deep_integration_settings_changed(self, _event=None) -> None:
+        preview_session = self._collect_session()
+        self._refresh_deep_integration_panel(preview_session)
+        self._refresh_project_home(preview_session)
+
+    def refresh_deep_integration_panel_now(self) -> None:
+        try:
+            self.session = self._collect_session()
+            self._refresh_deep_integration_panel(self.session)
+            self._refresh_project_home(self.session)
+            self._save_session_quietly()
+            self._log("Deep Integration 패널을 현재 설정 기준으로 새로고침했습니다.")
+        except Exception as exc:
+            messagebox.showerror("Deep Integration 새로고침 실패", str(exc))
+
+    def copy_deep_integration_registry(self) -> None:
+        try:
+            if not self._current_deep_integration_registry.strip():
+                self._refresh_deep_integration_panel()
+            self._copy_text_to_clipboard(
+                title="Capability Registry 복사",
+                text=self._current_deep_integration_registry,
+                success_log="Deep Integration capability registry를 클립보드로 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Capability registry 복사 실패", str(exc))
+
+    def copy_deep_integration_handoff(self) -> None:
+        try:
+            if not self._current_deep_integration_handoff.strip():
+                self._refresh_deep_integration_panel()
+            self._copy_text_to_clipboard(
+                title="Handoff Bundle 복사",
+                text=self._current_deep_integration_handoff,
+                success_log="Deep Integration handoff bundle을 클립보드로 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Handoff bundle 복사 실패", str(exc))
+
+    def copy_deep_integration_observability(self) -> None:
+        try:
+            if not self._current_deep_integration_observability.strip():
+                self._refresh_deep_integration_panel()
+            self._copy_text_to_clipboard(
+                title="Observability 복사",
+                text=self._current_deep_integration_observability,
+                success_log="Deep Integration observability 리포트를 클립보드로 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Observability 복사 실패", str(exc))
+
+    def _refresh_live_ops_panel(self, session: SessionConfig | None = None) -> None:
+        active_session = session
+        if active_session is None:
+            try:
+                active_session = self._collect_session()
+            except Exception:
+                active_session = self.session
+
+        profile_label = self._live_ops_profile_label_for_id(active_session.live_ops.selected_profile_id)
+        if profile_label and self.live_ops_profile_var.get() != profile_label:
+            self.live_ops_profile_var.set(profile_label)
+        report_label = self._live_ops_report_label_for_id(active_session.live_ops.report_cadence_id)
+        if report_label and self.live_ops_report_var.get() != report_label:
+            self.live_ops_report_var.set(report_label)
+        reentry_label = self._live_ops_reentry_label_for_id(active_session.live_ops.reentry_mode_id)
+        if reentry_label and self.live_ops_reentry_var.get() != reentry_label:
+            self.live_ops_reentry_var.set(reentry_label)
+        if self.live_ops_max_steps_var.get() != str(active_session.live_ops.max_unattended_steps):
+            self.live_ops_max_steps_var.set(str(active_session.live_ops.max_unattended_steps))
+
+        decision = self.engine.recommend_live_ops_status(active_session, self.runtime)
+        profile = active_session.live_ops.selected_profile()
+        charter = self.engine.build_live_ops_charter(active_session, self.runtime)
+        launchpad = self.engine.build_live_ops_launchpad(active_session, self.runtime)
+        reentry_brief = self.engine.build_live_ops_reentry_brief(active_session, self.runtime)
+        recovery = self.engine.build_live_ops_recovery_playbook(active_session, self.runtime)
+        shift_brief = self.engine.build_live_ops_shift_brief(active_session, self.runtime)
+
+        self._current_live_ops_charter = charter
+        self._current_live_ops_launchpad = launchpad
+        self._current_live_ops_reentry_brief = reentry_brief
+        self._current_live_ops_recovery = recovery
+        self._current_live_ops_shift_brief = shift_brief
+
+        self.live_ops_profile_status_var.set(
+            f"프로필: {profile.title} | 보고: {active_session.live_ops.selected_report_cadence().title} | 재진입: {active_session.live_ops.selected_reentry_mode().title}"
+        )
+        self.live_ops_lane_status_var.set(f"운영 레인: {decision.lane_id} | {decision.lane_reason}")
+        self.live_ops_touchpoint_var.set(f"터치포인트: {decision.operator_touchpoint} | {decision.reentry_action}")
+        self.live_ops_recovery_status_var.set(
+            f"복구 단계: {decision.recovery_level} | {decision.recovery_reason}"
+        )
+
+        self.live_ops_charter_state_var.set("Codex 실행 전에 운영 원칙과 감독 가드를 정리한 차터입니다.")
+        self.live_ops_launchpad_state_var.set("지금 바로 실행할 때 확인할 체크리스트와 즉시 행동을 보여줍니다.")
+        self.live_ops_reentry_state_var.set("트리아지와 현재 스레드 결과를 다시 읽고 재진입할 때의 기준을 보여줍니다.")
+        self.live_ops_recovery_state_var.set("막힘, 수동 검토, 재시도 상황에서 어떤 수준으로 복구할지 안내합니다.")
+        self.live_ops_shift_state_var.set("현재 운영 상태를 운영자 브리프처럼 짧게 요약해 보여줍니다.")
+
+        self._set_readonly_text(self.live_ops_charter_preview, charter)
+        self._set_readonly_text(self.live_ops_launchpad_preview, launchpad)
+        self._set_readonly_text(self.live_ops_reentry_preview, reentry_brief)
+        self._set_readonly_text(self.live_ops_recovery_preview, recovery)
+        self._set_readonly_text(self.live_ops_shift_preview, shift_brief)
+
+    def _on_live_ops_settings_changed(self, _event=None) -> None:
+        preview_session = self._collect_session()
+        self._refresh_live_ops_panel(preview_session)
+        self._refresh_project_home(preview_session)
+
+    def refresh_live_ops_panel_now(self) -> None:
+        try:
+            self.session = self._collect_session()
+            self._refresh_live_ops_panel(self.session)
+            self._refresh_project_home(self.session)
+            self._save_session_quietly()
+            self._log("라이브 오퍼레이션 패널을 현재 설정 기준으로 새로고침했습니다.")
+        except Exception as exc:
+            messagebox.showerror("라이브 오퍼레이션 새로고침 실패", str(exc))
+
+    def copy_live_ops_charter(self) -> None:
+        try:
+            if not self._current_live_ops_charter.strip():
+                self._refresh_live_ops_panel()
+            self._copy_text_to_clipboard(
+                title="운영 차터 복사",
+                text=self._current_live_ops_charter,
+                success_log="운영 차터를 클립보드로 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("운영 차터 복사 실패", str(exc))
+
+    def copy_live_ops_reentry_brief(self) -> None:
+        try:
+            if not self._current_live_ops_reentry_brief.strip():
+                self._refresh_live_ops_panel()
+            self._copy_text_to_clipboard(
+                title="재진입 브리프 복사",
+                text=self._current_live_ops_reentry_brief,
+                success_log="재진입 브리프를 클립보드로 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("재진입 브리프 복사 실패", str(exc))
+
+    def copy_live_ops_recovery(self) -> None:
+        try:
+            if not self._current_live_ops_recovery.strip():
+                self._refresh_live_ops_panel()
+            self._copy_text_to_clipboard(
+                title="복구 플레이북 복사",
+                text=self._current_live_ops_recovery,
+                success_log="복구 플레이북을 클립보드로 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("복구 플레이북 복사 실패", str(exc))
+
+    def copy_live_ops_shift_brief(self) -> None:
+        try:
+            if not self._current_live_ops_shift_brief.strip():
+                self._refresh_live_ops_panel()
+            self._copy_text_to_clipboard(
+                title="시프트 브리프 복사",
+                text=self._current_live_ops_shift_brief,
+                success_log="시프트 브리프를 클립보드로 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("시프트 브리프 복사 실패", str(exc))
+
     def _set_popup_topmost(self, enabled: bool) -> None:
         try:
             self.root.attributes("-topmost", enabled)
@@ -2544,7 +3402,7 @@ class JavisApp:
         self.root.geometry(f"{width}x{height}+{clamped_x}+{clamped_y}")
 
     def _layout_popup_action_bar(self, popup_width: int) -> None:
-        two_row = popup_width < 410
+        two_row = popup_width < 470
         for index, button in enumerate(self.popup_action_buttons):
             button.grid_forget()
             if two_row:
@@ -2565,8 +3423,8 @@ class JavisApp:
     def _update_popup_density(self) -> None:
         self.root.update_idletasks()
         popup_width = max(self.root.winfo_width(), self._popup_compact_size[0])
-        text_wrap = popup_width - 88
-        project_wrap = popup_width - 180
+        text_wrap = popup_width - 76
+        project_wrap = popup_width - 168
 
         self._set_wraplength(self.popup_project_label, project_wrap)
         self._set_wraplength(self.popup_status_label, text_wrap)
@@ -2715,33 +3573,6 @@ class JavisApp:
         self._refresh_runtime_labels()
         self._log(reason)
 
-    def show_status_summary(self) -> None:
-        if self._popup_compact:
-            self.toggle_popup_compact()
-            self._log("팝업 상세 카드를 다시 펼쳤습니다.")
-            return
-        lines = [
-            f"상태: {self._surface_state.badge_label}",
-            f"현재: {self._surface_state.title}",
-            f"요약: {self._surface_state.summary}",
-            f"이유: {self._surface_state.reason}",
-            f"다음 행동: {self._surface_state.next_action}",
-            f"진행도: {self._surface_state.progress_label}",
-            f"상세: {self._surface_state.detail_label}",
-            f"위험: {self._surface_state.risk_label}",
-        ]
-        if self.runtime.last_judgment.has_result:
-            result = self.runtime.last_judgment
-            lines.extend(
-                [
-                    f"판단: {result.decision}",
-                    f"판단 근거: {result.reason}",
-                    f"confidence: {result.confidence:.2f}",
-                    f"source: {result.source or 'unknown'}",
-                ]
-            )
-        messagebox.showinfo("javis 요약", "\n\n".join(lines))
-
     def _close_application(self) -> None:
         self.stop_event.set()
         self.runtime.auto_running = False
@@ -2774,8 +3605,8 @@ class JavisApp:
                 [
                     f"판단: {result.decision}",
                     f"판단 근거: {result.reason}",
-                    f"confidence: {result.confidence:.2f}",
-                    f"source: {result.source or 'unknown'}",
+                    f"신뢰도: {result.confidence:.2f}",
+                    f"판단 출처: {result.source or '알 수 없음'}",
                 ]
             )
 
@@ -2973,20 +3804,28 @@ class JavisApp:
     def _on_recent_project_selected(self, _event=None) -> None:
         self._refresh_project_home()
 
-    def _refresh_project_home(self) -> None:
-        steps = self.session.project.steps()
+    def _refresh_project_home(self, session: SessionConfig | None = None) -> None:
+        active_session = session or self.session
+        steps = active_session.project.steps()
         total_steps = len(steps)
-        project_title = self.session.project.project_summary or self.session.project.target_outcome or "프로젝트 정보 미입력"
-        target_text = self.session.project.target_outcome or "목표 수준이 아직 없습니다."
-        current_strategy = self.session.codex_strategy.selected_preset()
-        current_decision = self.engine.recommend_codex_automation_mode(self.session, self.runtime)
+        project_title = active_session.project.project_summary or active_session.project.target_outcome or "프로젝트 정보 미입력"
+        target_text = active_session.project.target_outcome or "목표 수준이 아직 없습니다."
+        current_strategy = active_session.codex_strategy.selected_preset()
+        current_decision = self.engine.recommend_codex_automation_mode(active_session, self.runtime)
         current_mode = get_codex_automation_mode_option(current_decision.effective_mode_id)
+        current_deep_decision = self.engine.recommend_deep_integration_mode(active_session, self.runtime)
+        current_deep_mode = get_deep_integration_mode_option(current_deep_decision.effective_mode_id)
+        current_live_ops = self.engine.recommend_live_ops_status(active_session, self.runtime)
         strategy_text = (
-            f"운영 프로필: {current_strategy.title} | 선택 mode: {self.session.codex_strategy.selected_mode().title} | "
+            f"운영 프로필: {current_strategy.title} | 선택 mode: {active_session.codex_strategy.selected_mode().title} | "
             f"실제 launch: {current_mode.title}"
         )
-        if self.session.codex_strategy.custom_instruction.strip():
-            strategy_text += "\n추가 지시: " + self.session.codex_strategy.custom_instruction.strip()
+        strategy_text += (
+            f"\nDeep integration: {current_deep_mode.title} | supervisor: {current_deep_decision.supervisor_state}"
+        )
+        strategy_text += f"\n라이브 운영: {active_session.live_ops.selected_profile().title} | 레인: {current_live_ops.lane_id}"
+        if active_session.codex_strategy.custom_instruction.strip():
+            strategy_text += "\n추가 지시: " + active_session.codex_strategy.custom_instruction.strip()
         completed_steps = min(self.runtime.next_step_index, total_steps)
         if total_steps == 0:
             progress_text = "현재 단계 정보가 없습니다."
@@ -3023,10 +3862,17 @@ class JavisApp:
         recent_strategy = entry.session.codex_strategy.selected_preset()
         recent_decision = self.engine.recommend_codex_automation_mode(entry.session, entry.runtime)
         recent_mode = get_codex_automation_mode_option(recent_decision.effective_mode_id)
+        recent_deep_decision = self.engine.recommend_deep_integration_mode(entry.session, entry.runtime)
+        recent_deep_mode = get_deep_integration_mode_option(recent_deep_decision.effective_mode_id)
+        recent_live_ops = self.engine.recommend_live_ops_status(entry.session, entry.runtime)
         recent_strategy_text = (
             f"운영 프로필: {recent_strategy.title} | 선택 mode: {entry.session.codex_strategy.selected_mode().title} | "
             f"실제 launch: {recent_mode.title}"
         )
+        recent_strategy_text += (
+            f"\nDeep integration: {recent_deep_mode.title} | supervisor: {recent_deep_decision.supervisor_state}"
+        )
+        recent_strategy_text += f"\n라이브 운영: {entry.session.live_ops.selected_profile().title} | 레인: {recent_live_ops.lane_id}"
         if entry.session.codex_strategy.custom_instruction.strip():
             recent_strategy_text += "\n추가 지시: " + entry.session.codex_strategy.custom_instruction.strip()
         self.recent_project_summary_var.set(f"{title}\n저장 시각: {stamp}")
@@ -3079,6 +3925,7 @@ class JavisApp:
         self._current_queue = queue
         self._refresh_surface_state()
         self._render_prompt_panel(preview, queue)
+        self._refresh_project_home(self.session)
         self._refresh_codex_strategy_panel(self.session)
         self._refresh_judgment_panel(self.session)
         self._refresh_visual_panel(self.session)
@@ -3160,6 +4007,20 @@ class JavisApp:
         self._set_scrolled_text(self.steps_text, self.session.project.steps_text)
         self.codex_strategy_var.set(self._codex_strategy_label_for_id(self.session.codex_strategy.selected_preset_id))
         self.codex_mode_var.set(self._codex_mode_label_for_id(self.session.codex_strategy.selected_mode_id))
+        self.deep_integration_mode_var.set(
+            self._deep_integration_mode_label_for_id(self.session.deep_integration.selected_mode_id)
+        )
+        self.deep_app_server_readiness_var.set(
+            self._deep_integration_readiness_label_for_id(self.session.deep_integration.app_server_readiness_id)
+        )
+        self.deep_cloud_trigger_readiness_var.set(
+            self._deep_integration_readiness_label_for_id(self.session.deep_integration.cloud_trigger_readiness_id)
+        )
+        self.deep_fallback_allowed_var.set(self.session.deep_integration.desktop_fallback_allowed)
+        self.live_ops_profile_var.set(self._live_ops_profile_label_for_id(self.session.live_ops.selected_profile_id))
+        self.live_ops_report_var.set(self._live_ops_report_label_for_id(self.session.live_ops.report_cadence_id))
+        self.live_ops_reentry_var.set(self._live_ops_reentry_label_for_id(self.session.live_ops.reentry_mode_id))
+        self.live_ops_max_steps_var.set(str(self.session.live_ops.max_unattended_steps))
         self.judgment_engine_mode_var.set(self._judgment_mode_label_for_id(self.session.judgment.engine_mode_id))
         self.judgment_model_name_var.set(self.session.judgment.model_name)
         self.judgment_confidence_var.set(str(self.session.judgment.confidence_threshold))
@@ -3175,6 +4036,10 @@ class JavisApp:
         self.voice_spoken_feedback_var.set(self.session.voice.spoken_feedback_enabled)
         self.voice_ambient_ready_var.set(self.session.voice.ambient_ready_enabled)
         self._set_scrolled_text(self.codex_strategy_note, self.session.codex_strategy.custom_instruction)
+        self.deep_app_server_notes_var.set(self.session.deep_integration.app_server_notes)
+        self.deep_cloud_trigger_notes_var.set(self.session.deep_integration.cloud_trigger_notes)
+        self._set_scrolled_text(self.deep_handoff_note, self.session.deep_integration.handoff_notes)
+        self._set_scrolled_text(self.live_ops_note, self.session.live_ops.operator_note)
         self._set_scrolled_text(self.visual_expected_page, self.session.visual.expected_page)
         self._set_scrolled_text(self.visual_focus, self.session.visual.observation_focus_text)
         self._set_scrolled_text(self.visual_expected_signals, self.session.visual.expected_signals_text)
@@ -3218,6 +4083,18 @@ class JavisApp:
         session.codex_strategy.selected_preset_id = self._current_codex_strategy_preset_id()
         session.codex_strategy.selected_mode_id = self._current_codex_mode_id()
         session.codex_strategy.custom_instruction = self.codex_strategy_note.get("1.0", END).strip()
+        session.deep_integration.selected_mode_id = self._current_deep_integration_mode_id()
+        session.deep_integration.app_server_readiness_id = self._current_app_server_readiness_id()
+        session.deep_integration.cloud_trigger_readiness_id = self._current_cloud_trigger_readiness_id()
+        session.deep_integration.desktop_fallback_allowed = bool(self.deep_fallback_allowed_var.get())
+        session.deep_integration.app_server_notes = self.deep_app_server_notes_var.get().strip()
+        session.deep_integration.cloud_trigger_notes = self.deep_cloud_trigger_notes_var.get().strip()
+        session.deep_integration.handoff_notes = self.deep_handoff_note.get("1.0", END).strip()
+        session.live_ops.selected_profile_id = self._current_live_ops_profile_id()
+        session.live_ops.report_cadence_id = self._current_live_ops_report_id()
+        session.live_ops.reentry_mode_id = self._current_live_ops_reentry_id()
+        session.live_ops.max_unattended_steps = max(1, int(self.live_ops_max_steps_var.get().strip() or "3"))
+        session.live_ops.operator_note = self.live_ops_note.get("1.0", END).strip()
         session.judgment.engine_mode_id = self._current_judgment_engine_mode_id()
         session.judgment.model_name = self.judgment_model_name_var.get().strip() or session.judgment.model_name
         session.judgment.confidence_threshold = float(self.judgment_confidence_var.get().strip() or "0.6")
@@ -3677,6 +4554,7 @@ class JavisApp:
         self._refresh_surface_state()
         self._refresh_control_center_header()
         self._refresh_project_home()
+        self._refresh_codex_strategy_panel(self.session)
         self._refresh_judgment_panel(self.session)
         self._refresh_visual_panel(self.session)
         self._refresh_voice_panel(self.session)

@@ -28,16 +28,18 @@ class SessionStore:
             return PersistedSessionState(log_path=str(self.log_path))
         data = json.loads(self.session_path.read_text(encoding="utf-8"))
         if self._is_legacy_session_payload(data):
-            return PersistedSessionState(
+            persisted = PersistedSessionState(
                 schema_version=SESSION_SCHEMA_VERSION,
                 log_path=str(self.log_path),
                 session=SessionConfig.from_dict(data),
                 runtime=RuntimeState(),
             )
-
-        persisted = PersistedSessionState.from_dict(data)
-        if not persisted.log_path:
-            persisted.log_path = str(self.log_path)
+        else:
+            persisted = PersistedSessionState.from_dict(data)
+            if not persisted.log_path:
+                persisted.log_path = str(self.log_path)
+        if self._sanitize_persisted_state(persisted):
+            self._write_snapshot(persisted)
         return persisted
 
     def save(self, persisted: PersistedSessionState) -> PersistedSessionState:
@@ -71,6 +73,113 @@ class SessionStore:
         if not isinstance(data, dict):
             return False
         return "schema_version" not in data and "project" in data and "window" in data
+
+    def _write_snapshot(self, persisted: PersistedSessionState) -> None:
+        payload = json.dumps(persisted.to_dict(), ensure_ascii=False, indent=2)
+        self.session_path.write_text(payload, encoding="utf-8")
+
+    def _sanitize_persisted_state(self, persisted: PersistedSessionState) -> bool:
+        changed = False
+        if self._sanitize_session_config(persisted.session):
+            changed = True
+        if self._sanitize_runtime_state(persisted.runtime):
+            changed = True
+
+        sanitized_recent_projects: list[RecentProjectEntry] = []
+        for entry in persisted.recent_projects:
+            if self._sanitize_recent_project(entry):
+                changed = True
+            if entry.project_key.strip():
+                sanitized_recent_projects.append(entry)
+            else:
+                changed = True
+        if len(sanitized_recent_projects) != len(persisted.recent_projects):
+            changed = True
+        persisted.recent_projects = sanitized_recent_projects
+        return changed
+
+    def _sanitize_session_config(self, session: SessionConfig) -> bool:
+        changed = False
+
+        cleaned_summary = self._sanitize_text_field(session.project.project_summary)
+        if cleaned_summary != session.project.project_summary:
+            session.project.project_summary = cleaned_summary
+            changed = True
+
+        cleaned_target = self._sanitize_text_field(session.project.target_outcome)
+        if cleaned_target != session.project.target_outcome:
+            session.project.target_outcome = cleaned_target
+            changed = True
+
+        cleaned_steps = self._sanitize_multiline_field(session.project.steps_text)
+        if cleaned_steps != session.project.steps_text:
+            session.project.steps_text = cleaned_steps
+            changed = True
+
+        return changed
+
+    def _sanitize_runtime_state(self, runtime: RuntimeState) -> bool:
+        changed = False
+        if self._looks_corrupted_text(runtime.prompt_generated) or self._looks_corrupted_text(runtime.prompt_draft):
+            runtime.clear_prompt_preview()
+            changed = True
+        return changed
+
+    def _sanitize_recent_project(self, entry: RecentProjectEntry) -> bool:
+        changed = False
+        if self._sanitize_session_config(entry.session):
+            changed = True
+        if self._sanitize_runtime_state(entry.runtime):
+            changed = True
+
+        cleaned_summary = self._sanitize_text_field(entry.project_summary)
+        if cleaned_summary != entry.project_summary:
+            entry.project_summary = cleaned_summary
+            changed = True
+
+        cleaned_target = self._sanitize_text_field(entry.target_outcome)
+        if cleaned_target != entry.target_outcome:
+            entry.target_outcome = cleaned_target
+            changed = True
+
+        parts = [
+            entry.session.project.project_summary.strip(),
+            entry.session.project.target_outcome.strip(),
+            entry.session.project.steps_text.strip(),
+        ]
+        cleaned_project_key = "\n".join(part for part in parts if part).strip()
+        if cleaned_project_key != entry.project_key:
+            entry.project_key = cleaned_project_key
+            changed = True
+        if not entry.project_summary:
+            entry.project_summary = entry.session.project.project_summary
+        if not entry.target_outcome:
+            entry.target_outcome = entry.session.project.target_outcome
+        return changed
+
+    def _sanitize_text_field(self, text: str) -> str:
+        value = text.strip()
+        if not value:
+            return ""
+        return "" if self._looks_corrupted_text(value) else text
+
+    def _sanitize_multiline_field(self, text: str) -> str:
+        if not text.strip():
+            return ""
+        cleaned_lines = [line for line in text.splitlines() if not self._looks_corrupted_text(line.strip())]
+        return "\n".join(cleaned_lines).strip()
+
+    def _looks_corrupted_text(self, text: str) -> bool:
+        if not text:
+            return False
+        if "\ufffd" in text or "???" in text:
+            return True
+        stripped = text.strip()
+        if not stripped or "?" not in stripped:
+            return False
+        question_count = stripped.count("?")
+        meaningful_count = sum(1 for char in stripped if char not in {"?", " ", "\t", "\n", "\r", "-", "_", "|", "/", ":", "."})
+        return question_count >= 2 and question_count >= meaningful_count
 
     def _update_recent_projects(
         self,

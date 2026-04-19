@@ -98,6 +98,69 @@ class CodexAutomationModeDecision:
     next_follow_up: str
 
 
+@dataclass(frozen=True)
+class DeepIntegrationModeOption:
+    mode_id: str
+    title: str
+    summary: str
+
+
+@dataclass(frozen=True)
+class DeepIntegrationReadinessOption:
+    readiness_id: str
+    title: str
+    summary: str
+
+
+@dataclass(frozen=True)
+class LiveOpsProfileOption:
+    profile_id: str
+    title: str
+    summary: str
+
+
+@dataclass(frozen=True)
+class LiveOpsReportCadenceOption:
+    cadence_id: str
+    title: str
+    summary: str
+
+
+@dataclass(frozen=True)
+class LiveOpsReentryOption:
+    reentry_id: str
+    title: str
+    summary: str
+
+
+@dataclass(frozen=True)
+class DeepIntegrationModeDecision:
+    recommended_mode_id: str
+    recommended_reason: str
+    effective_mode_id: str
+    effective_reason: str
+    app_server_readiness_id: str
+    cloud_trigger_readiness_id: str
+    supervisor_state: str
+    supervisor_reason: str
+    fallback_state: str
+    fallback_reason: str
+    handoff_target: str
+    reentry_source: str
+    next_review_point: str
+
+
+@dataclass(frozen=True)
+class LiveOpsStatusDecision:
+    lane_id: str
+    lane_reason: str
+    operator_touchpoint: str
+    report_style: str
+    reentry_action: str
+    recovery_level: str
+    recovery_reason: str
+
+
 CODEX_AUTOMATION_MODE_OPTIONS: tuple[CodexAutomationModeOption, ...] = (
     CodexAutomationModeOption(
         mode_id="recommended",
@@ -122,6 +185,116 @@ CODEX_AUTOMATION_MODE_OPTIONS: tuple[CodexAutomationModeOption, ...] = (
         title="project automation | 독립 실행",
         summary="nightly brief, smoke, triage처럼 독립 실행 보고가 더 자연스러운 작업에 씁니다.",
         result_location="Codex Automations pane / Triage에서 독립 실행 결과를 확인합니다.",
+    ),
+)
+
+
+DEEP_INTEGRATION_MODE_OPTIONS: tuple[DeepIntegrationModeOption, ...] = (
+    DeepIntegrationModeOption(
+        mode_id="recommended",
+        title="추천값 따르기",
+        summary="현재 환경 readiness와 Codex 운영 상태를 보고 javis가 가장 안전한 deep integration 경로를 고릅니다.",
+    ),
+    DeepIntegrationModeOption(
+        mode_id="native_app_assisted",
+        title="native app assisted",
+        summary="Codex app과 현재 automation/runboard/triage 흐름을 그대로 살리면서 javis가 상위 감독만 덮습니다.",
+    ),
+    DeepIntegrationModeOption(
+        mode_id="app_server_assisted",
+        title="App Server assisted",
+        summary="App Server readiness가 충분할 때 더 직접적인 handoff와 재진입 구조를 우선 고려합니다.",
+    ),
+    DeepIntegrationModeOption(
+        mode_id="cloud_trigger_supervision",
+        title="cloud trigger supervision",
+        summary="cloud follow-up이 성숙한 환경에서 javis가 polling보다 watch/re-entry 감독에 집중합니다.",
+    ),
+    DeepIntegrationModeOption(
+        mode_id="desktop_fallback",
+        title="desktop fallback",
+        summary="native 경로가 부족할 때만 desktop surface와 local fallback을 제한적으로 허용합니다.",
+    ),
+)
+
+
+DEEP_INTEGRATION_READINESS_OPTIONS: tuple[DeepIntegrationReadinessOption, ...] = (
+    DeepIntegrationReadinessOption(
+        readiness_id="auto",
+        title="자동 판단",
+        summary="javis가 현재 프로젝트와 운영 상태를 보고 readiness를 보수적으로 추정합니다.",
+    ),
+    DeepIntegrationReadinessOption(
+        readiness_id="unavailable",
+        title="사용 불가",
+        summary="현재 환경에서는 이 연결 경로를 실전 경로로 쓰지 않습니다.",
+    ),
+    DeepIntegrationReadinessOption(
+        readiness_id="limited",
+        title="제한적",
+        summary="실험/연구 수준이며, 기본 경로보다 보조 경로로만 고려합니다.",
+    ),
+    DeepIntegrationReadinessOption(
+        readiness_id="ready",
+        title="사용 준비됨",
+        summary="현재 프로젝트에서 실제 handoff 경로로 검토할 수 있습니다.",
+    ),
+)
+
+
+LIVE_OPS_PROFILE_OPTIONS: tuple[LiveOpsProfileOption, ...] = (
+    LiveOpsProfileOption(
+        profile_id="balanced",
+        title="균형 운용",
+        summary="Codex 네이티브 흐름을 우선 쓰되, milestone과 위험 신호에서는 javis가 다시 끼어듭니다.",
+    ),
+    LiveOpsProfileOption(
+        profile_id="hands_off",
+        title="자율 운용",
+        summary="플랜과 가드레일이 충분하면 Codex가 더 길게 진행하고 javis는 결과 재진입과 예외 처리 위주로 움직입니다.",
+    ),
+    LiveOpsProfileOption(
+        profile_id="guarded",
+        title="보수 운용",
+        summary="중요한 단계와 위험 신호마다 더 자주 멈추고 운영자 확인을 끼워 넣는 보수적 운영 프로필입니다.",
+    ),
+)
+
+
+LIVE_OPS_REPORT_CADENCE_OPTIONS: tuple[LiveOpsReportCadenceOption, ...] = (
+    LiveOpsReportCadenceOption(
+        cadence_id="milestone",
+        title="마일스톤 중심",
+        summary="큰 단계가 끝날 때마다 짧은 운영 브리프를 남기는 기본 cadence입니다.",
+    ),
+    LiveOpsReportCadenceOption(
+        cadence_id="stepwise",
+        title="단계별 보고",
+        summary="거의 매 단계마다 짧게 보고하고 재진입 판단을 남기는 촘촘한 cadence입니다.",
+    ),
+    LiveOpsReportCadenceOption(
+        cadence_id="risk_only",
+        title="위험 신호만",
+        summary="평상시에는 조용히 가고, 위험·보류·재시도 신호가 있을 때만 운영 브리프를 두껍게 남깁니다.",
+    ),
+)
+
+
+LIVE_OPS_REENTRY_OPTIONS: tuple[LiveOpsReentryOption, ...] = (
+    LiveOpsReentryOption(
+        reentry_id="same_thread",
+        title="같은 스레드",
+        summary="현재 운영 스레드로 바로 돌아와 다음 단계 판단과 후속 지시를 이어갑니다.",
+    ),
+    LiveOpsReentryOption(
+        reentry_id="triage_first",
+        title="트리아지 우선",
+        summary="Triage나 Automations 결과를 먼저 읽고, 필요한 내용만 운영 스레드로 다시 가져옵니다.",
+    ),
+    LiveOpsReentryOption(
+        reentry_id="manual_gate",
+        title="수동 게이트",
+        summary="결과를 바로 이어붙이지 않고 javis가 한 번 더 운영 게이트를 통과시킨 뒤 재진입합니다.",
     ),
 )
 
@@ -270,6 +443,11 @@ CODEX_AUTOMATION_PRESETS: tuple[CodexAutomationPreset, ...] = (
 
 DEFAULT_CODEX_STRATEGY_PRESET_ID = CODEX_AUTOMATION_PRESETS[0].preset_id
 DEFAULT_CODEX_AUTOMATION_MODE_ID = CODEX_AUTOMATION_MODE_OPTIONS[0].mode_id
+DEFAULT_DEEP_INTEGRATION_MODE_ID = DEEP_INTEGRATION_MODE_OPTIONS[0].mode_id
+DEFAULT_DEEP_INTEGRATION_READINESS_ID = DEEP_INTEGRATION_READINESS_OPTIONS[0].readiness_id
+DEFAULT_LIVE_OPS_PROFILE_ID = LIVE_OPS_PROFILE_OPTIONS[0].profile_id
+DEFAULT_LIVE_OPS_REPORT_CADENCE_ID = LIVE_OPS_REPORT_CADENCE_OPTIONS[0].cadence_id
+DEFAULT_LIVE_OPS_REENTRY_ID = LIVE_OPS_REENTRY_OPTIONS[0].reentry_id
 DEFAULT_JUDGMENT_MODEL_NAME = "gpt-5.4-mini"
 DEFAULT_JUDGMENT_ENGINE_MODE_ID = "auto"
 DEFAULT_JUDGMENT_CONFIDENCE_THRESHOLD = 0.6
@@ -292,6 +470,41 @@ def get_codex_automation_mode_option(mode_id: str) -> CodexAutomationModeOption:
         if option.mode_id == mode_id:
             return option
     return CODEX_AUTOMATION_MODE_OPTIONS[0]
+
+
+def get_deep_integration_mode_option(mode_id: str) -> DeepIntegrationModeOption:
+    for option in DEEP_INTEGRATION_MODE_OPTIONS:
+        if option.mode_id == mode_id:
+            return option
+    return DEEP_INTEGRATION_MODE_OPTIONS[0]
+
+
+def get_deep_integration_readiness_option(readiness_id: str) -> DeepIntegrationReadinessOption:
+    for option in DEEP_INTEGRATION_READINESS_OPTIONS:
+        if option.readiness_id == readiness_id:
+            return option
+    return DEEP_INTEGRATION_READINESS_OPTIONS[0]
+
+
+def get_live_ops_profile_option(profile_id: str) -> LiveOpsProfileOption:
+    for option in LIVE_OPS_PROFILE_OPTIONS:
+        if option.profile_id == profile_id:
+            return option
+    return LIVE_OPS_PROFILE_OPTIONS[0]
+
+
+def get_live_ops_report_cadence_option(cadence_id: str) -> LiveOpsReportCadenceOption:
+    for option in LIVE_OPS_REPORT_CADENCE_OPTIONS:
+        if option.cadence_id == cadence_id:
+            return option
+    return LIVE_OPS_REPORT_CADENCE_OPTIONS[0]
+
+
+def get_live_ops_reentry_option(reentry_id: str) -> LiveOpsReentryOption:
+    for option in LIVE_OPS_REENTRY_OPTIONS:
+        if option.reentry_id == reentry_id:
+            return option
+    return LIVE_OPS_REENTRY_OPTIONS[0]
 
 
 @dataclass(frozen=True)
@@ -430,6 +643,66 @@ class CodexStrategyConfig:
 
     def selected_mode(self) -> CodexAutomationModeOption:
         return get_codex_automation_mode_option(self.selected_mode_id)
+
+
+@dataclass
+class DeepIntegrationConfig:
+    selected_mode_id: str = DEFAULT_DEEP_INTEGRATION_MODE_ID
+    app_server_readiness_id: str = DEFAULT_DEEP_INTEGRATION_READINESS_ID
+    cloud_trigger_readiness_id: str = DEFAULT_DEEP_INTEGRATION_READINESS_ID
+    desktop_fallback_allowed: bool = True
+    app_server_notes: str = ""
+    cloud_trigger_notes: str = ""
+    handoff_notes: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DeepIntegrationConfig":
+        return cls(
+            selected_mode_id=data.get("selected_mode_id", DEFAULT_DEEP_INTEGRATION_MODE_ID),
+            app_server_readiness_id=data.get("app_server_readiness_id", DEFAULT_DEEP_INTEGRATION_READINESS_ID),
+            cloud_trigger_readiness_id=data.get("cloud_trigger_readiness_id", DEFAULT_DEEP_INTEGRATION_READINESS_ID),
+            desktop_fallback_allowed=bool(data.get("desktop_fallback_allowed", True)),
+            app_server_notes=data.get("app_server_notes", ""),
+            cloud_trigger_notes=data.get("cloud_trigger_notes", ""),
+            handoff_notes=data.get("handoff_notes", ""),
+        )
+
+    def selected_mode(self) -> DeepIntegrationModeOption:
+        return get_deep_integration_mode_option(self.selected_mode_id)
+
+    def selected_app_server_readiness(self) -> DeepIntegrationReadinessOption:
+        return get_deep_integration_readiness_option(self.app_server_readiness_id)
+
+    def selected_cloud_trigger_readiness(self) -> DeepIntegrationReadinessOption:
+        return get_deep_integration_readiness_option(self.cloud_trigger_readiness_id)
+
+
+@dataclass
+class LiveOpsConfig:
+    selected_profile_id: str = DEFAULT_LIVE_OPS_PROFILE_ID
+    report_cadence_id: str = DEFAULT_LIVE_OPS_REPORT_CADENCE_ID
+    reentry_mode_id: str = DEFAULT_LIVE_OPS_REENTRY_ID
+    max_unattended_steps: int = 3
+    operator_note: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "LiveOpsConfig":
+        return cls(
+            selected_profile_id=data.get("selected_profile_id", DEFAULT_LIVE_OPS_PROFILE_ID),
+            report_cadence_id=data.get("report_cadence_id", DEFAULT_LIVE_OPS_REPORT_CADENCE_ID),
+            reentry_mode_id=data.get("reentry_mode_id", DEFAULT_LIVE_OPS_REENTRY_ID),
+            max_unattended_steps=int(data.get("max_unattended_steps", 3) or 3),
+            operator_note=data.get("operator_note", ""),
+        )
+
+    def selected_profile(self) -> LiveOpsProfileOption:
+        return get_live_ops_profile_option(self.selected_profile_id)
+
+    def selected_report_cadence(self) -> LiveOpsReportCadenceOption:
+        return get_live_ops_report_cadence_option(self.report_cadence_id)
+
+    def selected_reentry_mode(self) -> LiveOpsReentryOption:
+        return get_live_ops_reentry_option(self.reentry_mode_id)
 
 
 @dataclass
@@ -897,6 +1170,8 @@ class AutomationConfig:
 class SessionConfig:
     project: ProjectContext = field(default_factory=ProjectContext)
     codex_strategy: CodexStrategyConfig = field(default_factory=CodexStrategyConfig)
+    deep_integration: DeepIntegrationConfig = field(default_factory=DeepIntegrationConfig)
+    live_ops: LiveOpsConfig = field(default_factory=LiveOpsConfig)
     judgment: JudgmentConfig = field(default_factory=JudgmentConfig)
     visual: VisualSupervisorConfig = field(default_factory=VisualSupervisorConfig)
     voice: VoiceConfig = field(default_factory=VoiceConfig)
@@ -911,6 +1186,8 @@ class SessionConfig:
     def from_dict(cls, data: dict[str, Any]) -> "SessionConfig":
         project = ProjectContext(**data.get("project", {}))
         codex_strategy = CodexStrategyConfig.from_dict(data.get("codex_strategy", {}))
+        deep_integration = DeepIntegrationConfig.from_dict(data.get("deep_integration", {}))
+        live_ops = LiveOpsConfig.from_dict(data.get("live_ops", {}))
         judgment = JudgmentConfig.from_dict(data.get("judgment", {}))
         visual = VisualSupervisorConfig.from_dict(data.get("visual", {}))
         voice = VoiceConfig.from_dict(data.get("voice", {}))
@@ -921,6 +1198,8 @@ class SessionConfig:
         return cls(
             project=project,
             codex_strategy=codex_strategy,
+            deep_integration=deep_integration,
+            live_ops=live_ops,
             judgment=judgment,
             visual=visual,
             voice=voice,

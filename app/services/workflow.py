@@ -11,7 +11,9 @@ from app.automation.windows_ui import WindowResolution, WindowsDesktopBridge
 from app.models import (
     CodexAutomationModeDecision,
     CycleReport,
+    DeepIntegrationModeDecision,
     JudgmentResult,
+    LiveOpsStatusDecision,
     PopupActionModel,
     PromptPreview,
     RuntimeState,
@@ -22,6 +24,11 @@ from app.models import (
     VoiceCommandResult,
     get_codex_automation_mode_option,
     get_codex_automation_preset,
+    get_deep_integration_mode_option,
+    get_deep_integration_readiness_option,
+    get_live_ops_profile_option,
+    get_live_ops_reentry_option,
+    get_live_ops_report_cadence_option,
     get_visual_capture_scope_option,
     get_visual_retention_option,
     get_visual_target_mode_option,
@@ -2167,6 +2174,450 @@ class AutomationEngine:
             f"- cadence 힌트: {decision.cadence_hint}",
             f"- worktree 힌트: {decision.worktree_hint}",
             "- 원칙: 네이티브 우선, fallback 보조, 애매하면 보류",
+        ]
+        return "\n".join(lines).strip()
+
+    def _resolve_deep_integration_readiness(
+        self,
+        session: SessionConfig,
+        runtime: RuntimeState,
+    ) -> tuple[str, str]:
+        app_server_id = session.deep_integration.app_server_readiness_id
+        cloud_trigger_id = session.deep_integration.cloud_trigger_readiness_id
+        automation_decision = self.recommend_codex_automation_mode(session, runtime)
+
+        if app_server_id == "auto":
+            if automation_decision.effective_mode_id == "project_automation":
+                app_server_id = "limited"
+            else:
+                app_server_id = "limited"
+
+        if cloud_trigger_id == "auto":
+            if automation_decision.effective_mode_id in {"thread_automation", "project_automation"}:
+                cloud_trigger_id = "limited"
+            else:
+                cloud_trigger_id = "unavailable"
+
+        return app_server_id, cloud_trigger_id
+
+    def recommend_deep_integration_mode(
+        self,
+        session: SessionConfig,
+        runtime: RuntimeState,
+    ) -> DeepIntegrationModeDecision:
+        automation_decision = self.recommend_codex_automation_mode(session, runtime)
+        app_server_id, cloud_trigger_id = self._resolve_deep_integration_readiness(session, runtime)
+        app_server_option = get_deep_integration_readiness_option(app_server_id)
+        cloud_trigger_option = get_deep_integration_readiness_option(cloud_trigger_id)
+        steps = session.project.steps()
+
+        if app_server_id == "ready":
+            recommended_mode_id = "app_server_assisted"
+            recommended_reason = (
+                "App Server readiness가 준비됨으로 표시되어 있어, 가장 얇고 직접적인 native handoff 경로를 먼저 검토하는 편이 맞습니다."
+            )
+        elif cloud_trigger_id == "ready":
+            recommended_mode_id = "cloud_trigger_supervision"
+            recommended_reason = (
+                "cloud trigger readiness가 준비됨으로 표시되어 있어, javis는 polling보다 watch/re-entry 감독에 집중하는 편이 좋습니다."
+            )
+        else:
+            recommended_mode_id = "native_app_assisted"
+            recommended_reason = (
+                "현재는 Codex app / automation / triage 같은 네이티브 흐름이 가장 안정적이므로, deep integration도 app-assisted 경로를 기본으로 보는 편이 안전합니다."
+            )
+
+        selected_mode_id = session.deep_integration.selected_mode_id
+        effective_mode_id = recommended_mode_id if selected_mode_id == "recommended" else selected_mode_id
+        effective_reason = recommended_reason if selected_mode_id == "recommended" else (
+            f"상단장님이 deep integration mode를 {get_deep_integration_mode_option(selected_mode_id).title}로 직접 고정했습니다."
+        )
+
+        if effective_mode_id == "desktop_fallback" and not session.deep_integration.desktop_fallback_allowed:
+            effective_mode_id = recommended_mode_id
+            effective_reason = "desktop fallback 허용이 꺼져 있어, 수동 override 대신 추천 native 경로로 되돌렸습니다."
+
+        if runtime.operator_paused or runtime.last_judgment.decision in {"ask_user", "pause"}:
+            supervisor_state = "escalate"
+            supervisor_reason = runtime.operator_pause_reason or runtime.last_judgment.message_to_user or "사람 확인이 필요한 신호가 있어 escalate 상태입니다."
+        elif effective_mode_id == "desktop_fallback" and session.deep_integration.desktop_fallback_allowed:
+            supervisor_state = "fallback"
+            supervisor_reason = "native 경로가 아니라 desktop fallback을 예외적으로 운영 경로에 올린 상태입니다."
+        elif runtime.auto_running:
+            supervisor_state = "watch"
+            supervisor_reason = "자동 루프가 돌고 있어 javis가 현재 흐름을 감시하는 watch 상태입니다."
+        elif runtime.voice_pending_action_id:
+            supervisor_state = "waiting"
+            supervisor_reason = "voice confirmation이 남아 있어 다음 액션 전 waiting 상태입니다."
+        elif not steps or not runtime.last_target_title:
+            supervisor_state = "sleep"
+            supervisor_reason = "현재 프로젝트 단계 또는 타깃 창이 충분히 준비되지 않아 sleep 상태로 보는 편이 맞습니다."
+        elif automation_decision.effective_mode_id == "project_automation":
+            supervisor_state = "re_enter"
+            supervisor_reason = "독립 실행 결과를 다시 받아 재진입해야 하는 흐름이라 re-enter 상태가 핵심입니다."
+        elif runtime.next_step_index >= len(steps):
+            supervisor_state = "waiting"
+            supervisor_reason = "현재 계획 전송이 모두 끝나 결과 검토나 다음 계획 입력을 기다리는 상태입니다."
+        else:
+            supervisor_state = "watch"
+            supervisor_reason = "현재 프로젝트와 Codex 타깃이 준비되어 있어 상위 감독 watch 상태로 보는 편이 자연스럽습니다."
+
+        if not session.deep_integration.desktop_fallback_allowed:
+            fallback_state = "blocked"
+            fallback_reason = "desktop fallback 허용이 꺼져 있어 native 경로가 우선이고 local fallback은 차단된 상태입니다."
+        elif effective_mode_id == "desktop_fallback":
+            fallback_state = "active"
+            fallback_reason = "현재 선택된 deep integration mode가 desktop fallback이라 예외 경로가 활성화된 상태입니다."
+        else:
+            fallback_state = "standby"
+            fallback_reason = "desktop fallback은 예외 경로로만 대기 중이며, 현재는 native 중심 흐름을 사용합니다."
+
+        if effective_mode_id == "app_server_assisted":
+            handoff_target = "App Server handoff bundle"
+            reentry_source = "App Server result / handoff"
+            next_review_point = "App Server handoff 성공 여부와 재진입 상태를 확인합니다."
+        elif effective_mode_id == "cloud_trigger_supervision":
+            handoff_target = "Codex cloud follow-up / triage"
+            reentry_source = "cloud trigger result"
+            next_review_point = "cloud follow-up 결과와 triage 재진입 신호를 확인합니다."
+        elif effective_mode_id == "desktop_fallback":
+            handoff_target = "local popup / desktop surface"
+            reentry_source = "local desktop fallback"
+            next_review_point = "fallback 해제 가능 여부와 native 복귀 조건을 확인합니다."
+        else:
+            handoff_target = automation_decision.result_location
+            reentry_source = "current thread / app-native result"
+            next_review_point = automation_decision.next_follow_up
+
+        return DeepIntegrationModeDecision(
+            recommended_mode_id=recommended_mode_id,
+            recommended_reason=recommended_reason,
+            effective_mode_id=effective_mode_id,
+            effective_reason=effective_reason,
+            app_server_readiness_id=app_server_option.readiness_id,
+            cloud_trigger_readiness_id=cloud_trigger_option.readiness_id,
+            supervisor_state=supervisor_state,
+            supervisor_reason=supervisor_reason,
+            fallback_state=fallback_state,
+            fallback_reason=fallback_reason,
+            handoff_target=handoff_target,
+            reentry_source=reentry_source,
+            next_review_point=next_review_point,
+        )
+
+    def build_deep_integration_capability_registry(self, session: SessionConfig, runtime: RuntimeState) -> str:
+        automation_decision = self.recommend_codex_automation_mode(session, runtime)
+        decision = self.recommend_deep_integration_mode(session, runtime)
+        app_server_option = get_deep_integration_readiness_option(decision.app_server_readiness_id)
+        cloud_trigger_option = get_deep_integration_readiness_option(decision.cloud_trigger_readiness_id)
+        payload = {
+            "project": {
+                "summary": session.project.project_summary.strip(),
+                "target_outcome": session.project.target_outcome.strip(),
+                "steps_total": len(session.project.steps()),
+            },
+            "capability_registry": {
+                "codex_app_native": automation_decision.effective_mode_id,
+                "app_server_readiness": {
+                    "id": app_server_option.readiness_id,
+                    "title": app_server_option.title,
+                    "notes": session.deep_integration.app_server_notes.strip(),
+                },
+                "cloud_trigger_readiness": {
+                    "id": cloud_trigger_option.readiness_id,
+                    "title": cloud_trigger_option.title,
+                    "notes": session.deep_integration.cloud_trigger_notes.strip(),
+                },
+                "desktop_fallback_allowed": session.deep_integration.desktop_fallback_allowed,
+            },
+            "deep_integration": {
+                "recommended_mode": get_deep_integration_mode_option(decision.recommended_mode_id).title,
+                "selected_mode": session.deep_integration.selected_mode().title,
+                "effective_mode": get_deep_integration_mode_option(decision.effective_mode_id).title,
+                "supervisor_state": decision.supervisor_state,
+                "fallback_state": decision.fallback_state,
+            },
+        }
+        return json.dumps(payload, ensure_ascii=False, indent=2)
+
+    def build_cross_surface_handoff_bundle(self, session: SessionConfig, runtime: RuntimeState) -> str:
+        decision = self.recommend_deep_integration_mode(session, runtime)
+        automation_decision = self.recommend_codex_automation_mode(session, runtime)
+        preview = self.build_prompt_preview(session, runtime)
+        steps = session.project.steps()
+        current_step = preview.step_title or ("모든 단계 전송 완료" if runtime.next_step_index >= len(steps) and steps else "다음 단계 없음")
+        lines = [
+            "[Cross-Surface Handoff Bundle]",
+            f"프로젝트: {session.project.project_summary or session.project.target_outcome or '미입력'}",
+            f"현재 단계: {current_step}",
+            f"자동화 경로: {get_codex_automation_mode_option(automation_decision.effective_mode_id).title}",
+            f"deep integration mode: {get_deep_integration_mode_option(decision.effective_mode_id).title}",
+            f"supervisor state: {decision.supervisor_state}",
+            f"handoff target: {decision.handoff_target}",
+            f"re-entry source: {decision.reentry_source}",
+            "",
+            "[현재 리스크 / 멈춤 신호]",
+            runtime.operator_pause_reason or runtime.last_judgment.message_to_user or runtime.last_visual_result.message_to_user or "명시된 멈춤 신호 없음",
+            "",
+            "[마지막 판단]",
+            runtime.last_judgment.message_to_user or runtime.last_judgment.reason or "판단 결과 없음",
+            "",
+            "[마지막 시각/음성 메모]",
+            runtime.last_visual_result.message_to_user or runtime.last_voice_result.message_to_user or "추가 evidence 메모 없음",
+            "",
+            "[handoff note]",
+            session.deep_integration.handoff_notes.strip() or "추가 handoff note 없음",
+            "",
+            "[다음 review point]",
+            decision.next_review_point,
+        ]
+        return "\n".join(lines).strip()
+
+    def build_integration_observability_report(self, session: SessionConfig, runtime: RuntimeState) -> str:
+        decision = self.recommend_deep_integration_mode(session, runtime)
+        automation_decision = self.recommend_codex_automation_mode(session, runtime)
+        app_server_option = get_deep_integration_readiness_option(decision.app_server_readiness_id)
+        cloud_trigger_option = get_deep_integration_readiness_option(decision.cloud_trigger_readiness_id)
+        lines = [
+            "[Deep Integration Observability]",
+            f"추천 mode: {get_deep_integration_mode_option(decision.recommended_mode_id).title}",
+            f"실제 mode: {get_deep_integration_mode_option(decision.effective_mode_id).title}",
+            f"Codex automation mode: {get_codex_automation_mode_option(automation_decision.effective_mode_id).title}",
+            "",
+            "[Readiness]",
+            f"- App Server: {app_server_option.title}",
+            f"- Cloud Trigger: {cloud_trigger_option.title}",
+            "",
+            "[Supervisor]",
+            f"- 상태: {decision.supervisor_state}",
+            f"- 이유: {decision.supervisor_reason}",
+            "",
+            "[Fallback]",
+            f"- 상태: {decision.fallback_state}",
+            f"- 이유: {decision.fallback_reason}",
+            "",
+            "[Re-entry]",
+            f"- source: {decision.reentry_source}",
+            f"- target: {decision.handoff_target}",
+            f"- next review: {decision.next_review_point}",
+            "",
+            "[운영 메모]",
+            session.deep_integration.app_server_notes.strip() or session.deep_integration.cloud_trigger_notes.strip() or "추가 운영 메모 없음",
+        ]
+        return "\n".join(lines).strip()
+
+    def recommend_live_ops_status(self, session: SessionConfig, runtime: RuntimeState) -> LiveOpsStatusDecision:
+        automation_decision = self.recommend_codex_automation_mode(session, runtime)
+        deep_decision = self.recommend_deep_integration_mode(session, runtime)
+        profile = session.live_ops.selected_profile()
+        cadence = session.live_ops.selected_report_cadence()
+        reentry = session.live_ops.selected_reentry_mode()
+        steps = session.project.steps()
+        steps_remaining = max(len(steps) - runtime.next_step_index, 0)
+
+        if runtime.operator_paused or runtime.last_judgment.decision in {"ask_user", "pause"}:
+            lane_id = "blocked"
+            lane_reason = runtime.operator_pause_reason or runtime.last_judgment.message_to_user or "사람 확인이 필요한 멈춤 신호가 있어 blocked lane으로 둡니다."
+        elif runtime.voice_pending_action_id:
+            lane_id = "manual_review"
+            lane_reason = "voice confirmation이나 수동 확인이 남아 있어 manual review lane으로 둡니다."
+        elif runtime.auto_running:
+            lane_id = "active_run"
+            lane_reason = "현재 자동 루프가 돌고 있어 javis는 결과를 지켜보는 active run lane에 있습니다."
+        elif automation_decision.effective_mode_id != "no_automation" and (
+            runtime.last_judgment.has_result or runtime.last_visual_result.has_result or runtime.last_voice_result.has_result
+        ):
+            lane_id = "reentry_ready"
+            lane_reason = "automation이나 follow-up 결과가 쌓여 있어 운영 스레드로 다시 들어갈 re-entry ready lane입니다."
+        elif automation_decision.effective_mode_id != "no_automation":
+            lane_id = "waiting_result"
+            lane_reason = "Codex native / automation 결과를 기다리는 waiting result lane입니다."
+        elif steps_remaining > 0 and runtime.last_target_title:
+            lane_id = "launch_ready"
+            lane_reason = "현재 프로젝트와 타겟 창이 준비되어 있어 바로 launch하거나 다음 단계로 이어갈 수 있습니다."
+        else:
+            lane_id = "manual_review"
+            lane_reason = "프로젝트 정보나 타겟 환경이 아직 덜 준비되어 있어 운영자가 한 번 더 점검해야 합니다."
+
+        if lane_id == "blocked":
+            operator_touchpoint = "현재 멈춤 이유를 읽고, 복구 플레이북 또는 ask_user 흐름으로 정리합니다."
+            recovery_level = "manual"
+            recovery_reason = "리스크 / 보류 / 수동 승인 신호가 있어 자동 재진입보다 사람 확인이 우선입니다."
+        elif lane_id == "manual_review":
+            operator_touchpoint = "런치 전 설정, confirmation, 정책 메모를 다시 확인합니다."
+            recovery_level = "guided"
+            recovery_reason = "설정과 확인 포인트를 맞추면 다시 자동 흐름으로 진입할 수 있습니다."
+        elif lane_id == "reentry_ready":
+            operator_touchpoint = f"{reentry.title} 기준으로 결과를 읽고, 다음 티켓 또는 다음 단계로 재진입합니다."
+            recovery_level = "light"
+            recovery_reason = "이미 결과가 있어 재진입 브리프를 읽고 같은 흐름으로 이어가면 됩니다."
+        elif lane_id == "waiting_result":
+            operator_touchpoint = "Triage / thread / project 결과를 기다렸다가 재진입 브리프로 이어갑니다."
+            recovery_level = "none"
+            recovery_reason = "지금은 추가 조작보다 결과 수집과 watch가 우선입니다."
+        elif lane_id == "active_run":
+            operator_touchpoint = "현재 자동 루프를 건드리지 말고 milestone 또는 risk 신호만 지켜봅니다."
+            recovery_level = "none"
+            recovery_reason = "현재는 recovery보다 bounded supervision이 더 중요합니다."
+        else:
+            operator_touchpoint = "운영 차터와 런치패드를 확인하고 Codex 실행을 시작합니다."
+            recovery_level = "light"
+            recovery_reason = "런치 직전 점검만 끝나면 현재 스레드나 automation으로 바로 넘길 수 있습니다."
+
+        if profile.profile_id == "guarded":
+            report_style = "보수 운용 | 중요한 단계와 위험 신호마다 짧은 운영 보고"
+        elif profile.profile_id == "hands_off":
+            report_style = f"{cadence.title} | Codex가 더 길게 달리고 javis는 예외와 재진입 중심"
+        else:
+            report_style = f"{cadence.title} | 마일스톤 중심의 감독 흐름"
+
+        if reentry.reentry_id == "triage_first":
+            reentry_action = "Triage / Automations 결과를 먼저 읽고, 필요한 내용만 운영 스레드에 handoff합니다."
+        elif reentry.reentry_id == "manual_gate":
+            reentry_action = "javis가 결과를 먼저 검토한 뒤 운영 게이트를 통과시킨 후 재진입합니다."
+        else:
+            reentry_action = "같은 운영 스레드로 돌아와 바로 다음 단계 판단과 후속 지시를 이어갑니다."
+
+        if steps_remaining > session.live_ops.max_unattended_steps and profile.profile_id != "hands_off":
+            reentry_action += f" 현재 남은 단계가 {steps_remaining}개라, {session.live_ops.max_unattended_steps}단계 이하로 다시 끊는 편이 안전합니다."
+
+        if deep_decision.supervisor_state == "escalate" and lane_id not in {"blocked", "manual_review"}:
+            lane_id = "manual_review"
+            lane_reason = "Deep Integration supervisor가 escalate를 요구해 live ops lane도 manual review로 올립니다."
+            operator_touchpoint = "Deep Integration handoff와 현재 리스크를 먼저 읽고 재시작 여부를 결정합니다."
+            recovery_level = "manual"
+            recovery_reason = "integration 레벨에서 이미 사람 확인이 필요한 신호가 올라왔습니다."
+
+        return LiveOpsStatusDecision(
+            lane_id=lane_id,
+            lane_reason=lane_reason,
+            operator_touchpoint=operator_touchpoint,
+            report_style=report_style,
+            reentry_action=reentry_action,
+            recovery_level=recovery_level,
+            recovery_reason=recovery_reason,
+        )
+
+    def build_live_ops_charter(self, session: SessionConfig, runtime: RuntimeState) -> str:
+        automation_decision = self.recommend_codex_automation_mode(session, runtime)
+        deep_decision = self.recommend_deep_integration_mode(session, runtime)
+        ops = self.recommend_live_ops_status(session, runtime)
+        lines = [
+            "[라이브 오퍼레이션 차터]",
+            f"project: {session.project.project_summary or session.project.target_outcome or '미입력'}",
+            f"운영 프로필: {session.live_ops.selected_profile().title}",
+            f"보고 주기: {session.live_ops.selected_report_cadence().title}",
+            f"재진입 방식: {session.live_ops.selected_reentry_mode().title}",
+            f"Codex 모드: {get_codex_automation_mode_option(automation_decision.effective_mode_id).title}",
+            f"딥 통합 경로: {get_deep_integration_mode_option(deep_decision.effective_mode_id).title}",
+            "",
+            "[운영 규칙]",
+            "- 한 번에 한 단계 또는 한 티켓만 확실히 앞으로 보냅니다.",
+            "- 완료 기준이 맞으면 이어가고, 애매하면 pause 또는 ask_user로 멈춥니다.",
+            "- 위험 신호, 재시도 루프, fallback 진입 이유는 짧게라도 꼭 남깁니다.",
+            f"- 운영 보고 스타일: {ops.report_style}",
+            f"- 재진입 방식: {ops.reentry_action}",
+            f"- 무인 진행 허용 폭: 최대 {session.live_ops.max_unattended_steps}단계",
+            "",
+            "[운영 메모]",
+            session.live_ops.operator_note.strip() or "추가 운영 메모 없음",
+        ]
+        return "\n".join(lines).strip()
+
+    def build_live_ops_launchpad(self, session: SessionConfig, runtime: RuntimeState) -> str:
+        preview = self.build_prompt_preview(session, runtime)
+        automation_decision = self.recommend_codex_automation_mode(session, runtime)
+        deep_decision = self.recommend_deep_integration_mode(session, runtime)
+        ops = self.recommend_live_ops_status(session, runtime)
+        lines = [
+            "[라이브 오퍼레이션 런치패드]",
+            f"현재 레인: {ops.lane_id}",
+            f"레인 사유: {ops.lane_reason}",
+            f"다음 단계: {preview.step_title or '다음 단계 없음'}",
+            "",
+            "[런치 체크리스트]",
+            f"1. Codex 실행 방식 확인: {get_codex_automation_mode_option(automation_decision.effective_mode_id).title}",
+            f"2. Deep integration 경로 확인: {get_deep_integration_mode_option(deep_decision.effective_mode_id).title}",
+            f"3. 운영자 터치포인트 확인: {ops.operator_touchpoint}",
+            f"4. 재진입 방식 확인: {session.live_ops.selected_reentry_mode().title}",
+            "",
+            "[즉시 행동]",
+            preview.draft_prompt.strip() or "프롬프트 새로고침 후 현재 단계 launch prompt를 준비합니다.",
+        ]
+        return "\n".join(lines).strip()
+
+    def build_live_ops_reentry_brief(self, session: SessionConfig, runtime: RuntimeState) -> str:
+        ops = self.recommend_live_ops_status(session, runtime)
+        automation_decision = self.recommend_codex_automation_mode(session, runtime)
+        lines = [
+            "[라이브 오퍼레이션 재진입 브리프]",
+            f"현재 레인: {ops.lane_id}",
+            f"Codex 모드: {get_codex_automation_mode_option(automation_decision.effective_mode_id).title}",
+            f"재진입 방식: {session.live_ops.selected_reentry_mode().title}",
+            "",
+            "[먼저 읽기]",
+            runtime.last_judgment.message_to_user or runtime.last_judgment.reason or runtime.last_visual_result.message_to_user or "우선 읽을 판단 메모 없음",
+            "",
+            "[이어서 할 일]",
+            ops.reentry_action,
+            "",
+            "[주의할 점]",
+            runtime.operator_pause_reason or runtime.last_visual_result.contradiction_reason or runtime.last_voice_result.message_to_user or "명시된 재진입 리스크 없음",
+        ]
+        return "\n".join(lines).strip()
+
+    def build_live_ops_recovery_playbook(self, session: SessionConfig, runtime: RuntimeState) -> str:
+        ops = self.recommend_live_ops_status(session, runtime)
+        lines = [
+            "[라이브 오퍼레이션 복구 플레이북]",
+            f"복구 단계: {ops.recovery_level}",
+            f"사유: {ops.recovery_reason}",
+            "",
+            "[기본 복구 흐름]",
+        ]
+        if ops.recovery_level == "manual":
+            lines.extend(
+                [
+                    "- 현재 멈춤 이유와 last judgment / visual note를 먼저 읽습니다.",
+                    "- 파괴적 작업 전 승인, 재시도 프롬프트, fallback 허용 여부를 다시 확인합니다.",
+                    "- 필요하면 ask_user 또는 manual gate로 전환합니다.",
+                ]
+            )
+        elif ops.recovery_level == "guided":
+            lines.extend(
+                [
+                    "- 운영 메모와 현재 lane reason을 읽고 작은 범위의 재진입부터 시도합니다.",
+                    "- deep integration과 codex mode가 현재 상황에 맞는지 다시 고릅니다.",
+                    "- 재시작 전에 런북과 re-entry brief를 같이 확인합니다.",
+                ]
+            )
+        elif ops.recovery_level == "light":
+            lines.extend(
+                [
+                    "- 결과를 같은 운영 스레드 또는 triage에서 다시 읽습니다.",
+                    "- 현재 단계를 넘겨도 되는지 짧게 판단하고 바로 이어갑니다.",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "- 현재는 recovery보다 관찰과 bounded supervision이 우선입니다.",
+                    "- 다음 review point가 올 때까지 과한 개입을 피합니다.",
+                ]
+            )
+        lines.extend(["", "[참고 메모]", session.live_ops.operator_note.strip() or "추가 운영 메모 없음"])
+        return "\n".join(lines).strip()
+
+    def build_live_ops_shift_brief(self, session: SessionConfig, runtime: RuntimeState) -> str:
+        ops = self.recommend_live_ops_status(session, runtime)
+        lines = [
+            "[라이브 오퍼레이션 시프트 브리프]",
+            f"프로젝트: {session.project.project_summary or session.project.target_outcome or '미입력'}",
+            f"현재 레인: {ops.lane_id}",
+            f"터치포인트: {ops.operator_touchpoint}",
+            f"보고 스타일: {ops.report_style}",
+            f"복구 단계: {ops.recovery_level}",
+            f"최근 메모: {runtime.last_judgment.message_to_user or runtime.last_visual_result.message_to_user or runtime.last_voice_result.message_to_user or '특이 사항 없음'}",
         ]
         return "\n".join(lines).strip()
 

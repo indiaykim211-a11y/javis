@@ -253,10 +253,20 @@ OpenAI 기반 판단 엔진입니다.
 
 완성형에 가까운 단계입니다.
 
+- 이 단계의 기준 문서는 `docs/planning-v2/phases/phase-7-deep-integration.md`입니다.
 - App Server 연구 및 연결 검토
 - cloud-based trigger 성숙도 반영
 - 더 깊은 항상-실행 감독
 - 필요한 경우에만 데스크톱 제어 fallback 유지
+
+### Phase 8. Live Operations
+
+`Phase 8`의 실행 문서는 `docs/planning-v2/phases/phase-8-live-operations.md`를 기준으로 봅니다.
+
+- Codex 운영을 실제로 굴리는 live operations 단계
+- 운영 profile / lane / re-entry / recovery를 제품 표면에 올림
+- same-thread / triage-first / manual-gate 재진입 흐름 정리
+- bounded supervision을 운영 규칙으로 고정
 
 ## 9. 릴리즈 관점 재정리
 
@@ -287,6 +297,18 @@ Release 6의 실행 문서는 `docs/planning-v2/releases/release-6-voice-beta.md
 음성 입력과 음성 브리핑을 Codex-first 운영 흐름 위에 얹는 릴리즈입니다.
 
 음성 입출력과 더 직접적인 Codex 연동 연구
+
+### Release 7. Deep Integration Beta
+
+Release 7의 실행 문서는 `docs/planning-v2/releases/release-7-deep-integration-beta.md`를 기준으로 봅니다.
+
+Codex native / App Server / cloud trigger / desktop fallback 경계를 정리하는 통합 릴리즈입니다.
+
+### Release 8. Live Ops Beta
+
+Release 8의 실행 문서는 `docs/planning-v2/releases/release-8-live-ops-beta.md`를 기준으로 봅니다.
+
+현재 lane, operator touchpoint, re-entry brief, recovery playbook을 실제 운영 표면으로 끌어올리는 릴리즈입니다.
 
 ## 10. 지금 당장 중요한 설계 결론
 

@@ -54,6 +54,18 @@
 42. `backlog/release-6-priority-board.md`
 43. `specs/voice-interaction-contract-v1.md`
 44. `checklists/release-6-smoke-checklist-v1.md`
+45. `phases/phase-7-deep-integration.md`
+46. `releases/release-7-deep-integration-beta.md`
+47. `epics/release-7-epics.md`
+48. `backlog/release-7-priority-board.md`
+49. `specs/deep-integration-capability-matrix-v1.md`
+50. `checklists/release-7-smoke-checklist-v1.md`
+51. `phases/phase-8-live-operations.md`
+52. `releases/release-8-live-ops-beta.md`
+53. `epics/release-8-epics.md`
+54. `backlog/release-8-priority-board.md`
+55. `specs/live-operations-lane-contract-v1.md`
+56. `checklists/release-8-smoke-checklist-v1.md`
 ## 현재 문서 맵
 
 - `releases/`
@@ -237,3 +249,51 @@
 - `checklists/release-6-smoke-checklist-v1.md`
   - Release 6를 5~10분 안에 반복 점검하는 기준 시나리오
   - 로컬 반자동 점검은 `scripts/release_6_smoke.py`로 바로 실행 가능
+
+## 이번에 추가된 Phase 7 / Release 7 실행 문서
+
+- `phases/phase-7-deep-integration.md`
+  - App Server / cloud trigger / fallback 경계를 Codex-first 원칙으로 정리한 Phase 7 기준 문서
+- `releases/release-7-deep-integration-beta.md`
+  - deep integration을 "더 많은 매크로"가 아니라 "더 좋은 네이티브 연결"로 정의한 Release 7 문서
+- `epics/release-7-epics.md`
+  - Release 7의 큰 개발 묶음
+- `backlog/release-7-priority-board.md`
+  - Release 7 우선순위와 스프린트 배치
+- `sprints/sprint-19-deep-integration-foundation.md`
+  - capability registry / App Server / cloud readiness 스프린트
+- `sprints/sprint-20-handoff-and-supervision.md`
+  - handoff / supervisor / fallback boundary 스프린트
+- `sprints/sprint-21-release-7-readiness.md`
+  - observability / smoke readiness 스프린트
+- `tickets/R7-001` ~ `tickets/R7-008`
+  - Phase 7 구현 범위
+- `specs/deep-integration-capability-matrix-v1.md`
+  - capability, readiness, integration mode, fallback 경계를 정리한 기준 문서
+- `checklists/release-7-smoke-checklist-v1.md`
+  - Release 7 deep integration 문서를 5~10분 안에 반복 점검하는 기준 시나리오
+  - 로컬 반자동 점검은 `scripts/release_7_smoke.py`로 바로 실행 가능
+
+## 이번에 추가한 Phase 8 / Release 8 실행 문서
+
+- `phases/phase-8-live-operations.md`
+  - Codex 운영을 실제로 굴리는 live operations 단계 기준 문서
+- `releases/release-8-live-ops-beta.md`
+  - 운영 lane / re-entry / recovery를 제품 표면으로 올리는 Release 8 문서
+- `epics/release-8-epics.md`
+  - Release 8 에픽 묶음
+- `backlog/release-8-priority-board.md`
+  - Release 8 우선순위와 구현 순서
+- `sprints/sprint-22-live-ops-foundation.md`
+  - profile / lane / charter / launchpad 스프린트
+- `sprints/sprint-23-reentry-and-recovery.md`
+  - re-entry / recovery / shift brief 스프린트
+- `sprints/sprint-24-release-8-readiness.md`
+  - persistence / panel / smoke readiness 스프린트
+- `tickets/R8-001` ~ `tickets/R8-008`
+  - Phase 8 구현 범위
+- `specs/live-operations-lane-contract-v1.md`
+  - live ops lane과 recovery level 계약 문서
+- `checklists/release-8-smoke-checklist-v1.md`
+  - Release 8 문서를 5~10분 안에 반복 점검하는 기준 시나리오
+  - 로컬 반자동 점검은 `scripts/release_8_smoke.py`로 바로 실행 가능

@@ -53,7 +53,7 @@ def main() -> None:
     app = JavisApp(root, workspace)
 
     try:
-        root.update_idletasks()
+        root.update()
 
         ensure(root.winfo_width() >= 380, "팝업 기본 폭이 너무 작습니다.")
         ensure(not app.popup_compact_frame.winfo_ismapped(), "초기 상태에서 compact 카드가 보이면 안 됩니다.")
@@ -61,13 +61,13 @@ def main() -> None:
         print_step("popup shell", "기본 팝업 레이아웃이 열렸습니다.")
 
         app.open_control_center()
-        root.update_idletasks()
+        root.update()
         ensure(app.control_center.state() == "normal", "Control Center가 열리지 않았습니다.")
         ensure(app.control_section_var.get() == "project", "Control Center 기본 진입 섹션이 project가 아닙니다.")
         print_step("control center open", "프로젝트 섹션으로 진입했습니다.")
 
         app.hide_control_center()
-        root.update_idletasks()
+        root.update()
         ensure(app.control_center.state() == "withdrawn", "Control Center가 닫히지 않았습니다.")
         print_step("control center close", "팝업으로 자연스럽게 복귀했습니다.")
 
@@ -82,7 +82,7 @@ def main() -> None:
             ],
         )
         app.save_session()
-        root.update_idletasks()
+        root.update()
 
         ensure(app.store.session_path.exists(), "세션 파일이 저장되지 않았습니다.")
         ensure(app.session.project.project_summary == "Release 1 Smoke A", "프로젝트 요약이 저장되지 않았습니다.")
@@ -91,7 +91,7 @@ def main() -> None:
         print_step("session save", "프로젝트와 정책 메모가 저장되었습니다.")
 
         app.toggle_popup_compact()
-        root.update_idletasks()
+        root.update()
         ensure(app.popup_compact_frame.winfo_ismapped(), "compact 카드가 보이지 않습니다.")
         ensure(not app.popup_detail_frame.winfo_ismapped(), "compact 상태에서 상세 카드가 숨겨지지 않았습니다.")
         compact_layout = [(btn.grid_info().get("row"), btn.grid_info().get("column")) for btn in app.popup_action_buttons]
@@ -99,7 +99,7 @@ def main() -> None:
         print_step("compact mode", "compact 카드와 2x2 버튼 레이아웃이 확인되었습니다.")
 
         app.toggle_popup_compact()
-        root.update_idletasks()
+        root.update()
         ensure(app.popup_detail_frame.winfo_ismapped(), "상세 모드로 복귀하지 못했습니다.")
         print_step("expanded mode", "상세 모드로 정상 복귀했습니다.")
 
@@ -112,7 +112,7 @@ def main() -> None:
         print_step("popup actions", f"버튼 라벨 {button_labels} / 보류-재개 흐름 확인")
 
         app.open_control_center()
-        root.update_idletasks()
+        root.update()
         build_seed_project(
             app,
             summary="Release 1 Smoke B",
@@ -124,22 +124,22 @@ def main() -> None:
             ],
         )
         app.save_session()
-        root.update_idletasks()
+        root.update()
         ensure(len(app.recent_projects) >= 2, "최근 프로젝트가 2개 이상 쌓이지 않았습니다.")
 
         app.recent_projects_combo.current(1)
         app.load_recent_project_selection()
-        root.update_idletasks()
+        root.update()
         ensure(app.session.project.project_summary == "Release 1 Smoke A", "최근 프로젝트 복원이 실패했습니다.")
         ensure("현재 단계" in app.project_home_progress_var.get() or "진행" in app.project_home_progress_var.get(), "프로젝트 홈 진행 정보가 비어 있습니다.")
         app.save_session()
-        root.update_idletasks()
+        root.update()
         print_step("recent project restore", "이전 프로젝트를 다시 불러왔습니다.")
 
         restored_root = Tk()
         restored_app = JavisApp(restored_root, workspace)
         try:
-            restored_root.update_idletasks()
+            restored_root.update()
             ensure(
                 restored_app.session.project.project_summary == "Release 1 Smoke A",
                 "재실행 후 저장된 세션이 복원되지 않았습니다.",
