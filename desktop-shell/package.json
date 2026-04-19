@@ -1,0 +1,31 @@
+{
+  "name": "javis-desktop-shell",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Electron + React shell for javis",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev:web": "vite",
+    "dev:api": "python -m app.api.server",
+    "dev:desktop": "powershell -ExecutionPolicy Bypass -File ..\\scripts\\run_javis_dev.ps1",
+    "dev:shell": "cross-env JAVIS_RENDERER_URL=http://127.0.0.1:5173 electron .",
+    "build:web": "vite build",
+    "build": "vite build",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^5.0.2",
+    "cross-env": "^10.0.0",
+    "electron": "^36.2.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0"
+  }
+}

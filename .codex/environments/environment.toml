@@ -12,3 +12,11 @@ command = '''
 cd "C:\Users\ykim2\Desktop\javis"
 python launcher.py
 '''
+
+[[actions]]
+name = "웹으로실행"
+icon = "run"
+command = '''
+cd "C:\Users\ykim2\Desktop\javis"
+python -m app.api.server
+'''

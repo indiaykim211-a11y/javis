@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 captures/
 runtime/
+desktop-shell/node_modules/
+desktop-shell/dist/
+desktop-shell/.vite/
