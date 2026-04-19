@@ -1,6 +1,6 @@
-# Codex Pilot
+# javis
 
-Codex Pilot은 상단장님의 현재 작업 흐름을 대신해 주기 위한 Windows 데스크톱 앱 MVP입니다.
+javis는 상단장님의 현재 작업 흐름을 대신해 주기 위한 Windows 데스크톱 앱 MVP입니다.
 
 이 앱이 노리는 역할은 아래와 같습니다.
 
@@ -33,6 +33,22 @@ Codex Pilot은 상단장님의 현재 작업 흐름을 대신해 주기 위한 W
 
 ```powershell
 python launcher.py
+```
+
+## 릴리즈 스모크
+
+수동 체크리스트는 아래 문서를 보면 됩니다.
+
+- `docs/planning-v2/checklists/release-1-smoke-checklist-v1.md`
+- `docs/planning-v2/checklists/release-2-smoke-checklist-v1.md`
+- `docs/planning-v2/checklists/release-3-smoke-checklist-v1.md`
+
+로컬 스모크 러너는 아래로 돌릴 수 있습니다.
+
+```powershell
+python scripts\release_1_smoke.py
+python scripts\release_2_smoke.py
+python scripts\release_3_smoke.py
 ```
 
 ## 추천 사용 흐름

@@ -1,1 +1,1 @@
-"""Service layer for Codex Pilot."""
+"""Service layer for javis."""

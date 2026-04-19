@@ -4,3 +4,11 @@ name = "javis"
 
 [setup]
 script = ""
+
+[[actions]]
+name = "실행"
+icon = "run"
+command = '''
+cd "C:\Users\ykim2\Desktop\javis"
+python launcher.py
+'''

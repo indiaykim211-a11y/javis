@@ -1,10 +1,10 @@
-# Jarvis Planning Index
+# javis Planning Index
 
 ## 문서 목적
 
-이 폴더는 `Jarvis`를 실제 개발 가능한 수준으로 집행하기 위한 실행 문서 세트입니다.
+이 폴더는 `javis`를 실제 개발 가능한 수준으로 집행하기 위한 실행 문서 세트입니다.
 
-상위 비전은 [../jarvis-master-plan.md](../jarvis-master-plan.md)에 있고, 이 폴더는 그 계획을 `릴리즈 -> 에픽 -> 스프린트 -> 티켓` 단위로 분해합니다.
+상위 비전은 [../javis-master-plan.md](../javis-master-plan.md)에 있고, 이 폴더는 그 계획을 `릴리즈 -> 에픽 -> 스프린트 -> 티켓` 단위로 분해합니다.
 
 ## 권장 읽기 순서
 

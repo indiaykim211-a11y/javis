@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "codex-pilot"
+name = "javis"
 version = "0.1.0"
 description = "Windows desktop operator for running Codex step by step."
 requires-python = ">=3.12"

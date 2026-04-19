@@ -1,1 +1,1 @@
-"""Automation helpers for Codex Pilot."""
+"""Automation helpers for javis."""

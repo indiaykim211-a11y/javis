@@ -1,1 +1,1 @@
-"""Codex Pilot package."""
+"""javis package."""
