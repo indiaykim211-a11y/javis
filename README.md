@@ -42,6 +42,9 @@ python launcher.py
 - `docs/planning-v2/checklists/release-1-smoke-checklist-v1.md`
 - `docs/planning-v2/checklists/release-2-smoke-checklist-v1.md`
 - `docs/planning-v2/checklists/release-3-smoke-checklist-v1.md`
+- `docs/planning-v2/checklists/release-4-smoke-checklist-v1.md`
+- `docs/planning-v2/checklists/release-5-smoke-checklist-v1.md`
+- `docs/planning-v2/checklists/release-6-smoke-checklist-v1.md`
 
 로컬 스모크 러너는 아래로 돌릴 수 있습니다.
 
@@ -49,6 +52,9 @@ python launcher.py
 python scripts\release_1_smoke.py
 python scripts\release_2_smoke.py
 python scripts\release_3_smoke.py
+python scripts\release_4_smoke.py
+python scripts\release_5_smoke.py
+python scripts\release_6_smoke.py
 ```
 
 ## 추천 사용 흐름

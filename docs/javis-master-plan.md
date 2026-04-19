@@ -223,6 +223,7 @@ OpenAI 기반 판단 엔진입니다.
 
 `Codex 결과를 위에서 해석하고 분기시키는 판단층`을 만드는 단계입니다.
 
+- 상세 전략은 `docs/planning-v2/phases/phase-4-judgment-overlay.md`로 이어집니다.
 - OpenAI 판단 엔진 1차 연결
 - continue / pause / retry / ask-user 분기
 - 정책 기반 재지시
@@ -232,19 +233,21 @@ OpenAI 기반 판단 엔진입니다.
 
 `화면을 읽고 판단 근거를 강화`하는 단계입니다.
 
+- 상세 전략은 `docs/planning-v2/phases/phase-5-visual-supervisor.md`로 이어집니다.
 - Codex 화면 캡처 해석
 - 브라우저 결과 화면 해석
 - 품질 이상 신호 감지
 - 시각 증거 기반 판단
+- Codex 주장과 실제 화면의 모순 탐지
 
 ### Phase 6. Voice Assistant
 
-`말로 쓰는 javis`로 넘어가는 단계입니다.
+이 단계의 기준 문서는 `docs/planning-v2/phases/phase-6-voice-assistant.md`입니다.
 
-- push-to-talk
-- 한국어 STT
-- 한국어 TTS 브리핑
-- 음성 명령 기반 진행/보류/요약
+- push-to-talk 중심 voice input
+- spoken briefing / why-paused / status summary
+- continue / pause / summary 중심 voice intent
+- confirmation gate와 device guard
 
 ### Phase 7. Deep Integration
 
@@ -277,7 +280,11 @@ OpenAI 판단 엔진이 위에서 감독하는 구조
 
 화면 인식과 브라우저 판독이 붙은 상태
 
-### Release 6. Voice / Deep Integration
+### Release 6. Voice Beta
+
+Release 6의 실행 문서는 `docs/planning-v2/releases/release-6-voice-beta.md`를 기준으로 봅니다.
+
+음성 입력과 음성 브리핑을 Codex-first 운영 흐름 위에 얹는 릴리즈입니다.
 
 음성 입출력과 더 직접적인 Codex 연동 연구
 

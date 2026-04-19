@@ -270,6 +270,14 @@ CODEX_AUTOMATION_PRESETS: tuple[CodexAutomationPreset, ...] = (
 
 DEFAULT_CODEX_STRATEGY_PRESET_ID = CODEX_AUTOMATION_PRESETS[0].preset_id
 DEFAULT_CODEX_AUTOMATION_MODE_ID = CODEX_AUTOMATION_MODE_OPTIONS[0].mode_id
+DEFAULT_JUDGMENT_MODEL_NAME = "gpt-5.4-mini"
+DEFAULT_JUDGMENT_ENGINE_MODE_ID = "auto"
+DEFAULT_JUDGMENT_CONFIDENCE_THRESHOLD = 0.6
+DEFAULT_VISUAL_TARGET_MODE_ID = "auto"
+DEFAULT_VISUAL_CAPTURE_SCOPE_ID = "targeted_only"
+DEFAULT_VISUAL_RETENTION_HINT_ID = "short"
+DEFAULT_VISUAL_SENSITIVE_RISK = "medium"
+DEFAULT_VOICE_LANGUAGE = "ko-KR"
 
 
 def get_codex_automation_preset(preset_id: str) -> CodexAutomationPreset:
@@ -284,6 +292,123 @@ def get_codex_automation_mode_option(mode_id: str) -> CodexAutomationModeOption:
         if option.mode_id == mode_id:
             return option
     return CODEX_AUTOMATION_MODE_OPTIONS[0]
+
+
+@dataclass(frozen=True)
+class JudgmentEngineModeOption:
+    mode_id: str
+    title: str
+    summary: str
+
+
+JUDGMENT_ENGINE_MODE_OPTIONS: tuple[JudgmentEngineModeOption, ...] = (
+    JudgmentEngineModeOption(
+        mode_id="auto",
+        title="자동 | OpenAI 가능하면 사용, 없으면 규칙 기반",
+        summary="API 키와 환경이 준비되면 OpenAI 판단을 시도하고, 아니면 안전한 규칙 기반 판단으로 내려옵니다.",
+    ),
+    JudgmentEngineModeOption(
+        mode_id="rule_based",
+        title="규칙 기반 프리뷰",
+        summary="현재 프로젝트 상태와 운영 모드, 최근 로그를 바탕으로 로컬 규칙 기반 판단만 수행합니다.",
+    ),
+)
+
+
+def get_judgment_engine_mode_option(mode_id: str) -> JudgmentEngineModeOption:
+    for option in JUDGMENT_ENGINE_MODE_OPTIONS:
+        if option.mode_id == mode_id:
+            return option
+    return JUDGMENT_ENGINE_MODE_OPTIONS[0]
+
+
+@dataclass(frozen=True)
+class VisualTargetModeOption:
+    mode_id: str
+    title: str
+    summary: str
+
+
+VISUAL_TARGET_MODE_OPTIONS: tuple[VisualTargetModeOption, ...] = (
+    VisualTargetModeOption(
+        mode_id="auto",
+        title="자동 | 필요할 때만 시각 확인",
+        summary="현재 단계, 판단 결과, 최근 로그를 보고 Codex 창 또는 브라우저 결과 화면 중 무엇을 읽을지 고릅니다.",
+    ),
+    VisualTargetModeOption(
+        mode_id="codex_window",
+        title="Codex 창 우선",
+        summary="Codex 화면과 최근 캡처를 기준으로 시각 근거를 먼저 읽습니다.",
+    ),
+    VisualTargetModeOption(
+        mode_id="browser_result",
+        title="브라우저 결과 화면 우선",
+        summary="브라우저 결과 화면, CTA, 오류 배너, 렌더링 상태를 먼저 읽습니다.",
+    ),
+)
+
+
+def get_visual_target_mode_option(mode_id: str) -> VisualTargetModeOption:
+    for option in VISUAL_TARGET_MODE_OPTIONS:
+        if option.mode_id == mode_id:
+            return option
+    return VISUAL_TARGET_MODE_OPTIONS[0]
+
+
+@dataclass(frozen=True)
+class VisualCaptureScopeOption:
+    scope_id: str
+    title: str
+    summary: str
+
+
+VISUAL_CAPTURE_SCOPE_OPTIONS: tuple[VisualCaptureScopeOption, ...] = (
+    VisualCaptureScopeOption(
+        scope_id="targeted_only",
+        title="타깃 캡처만",
+        summary="전체 화면 대신 현재 판단에 필요한 창이나 영역만 읽습니다.",
+    ),
+    VisualCaptureScopeOption(
+        scope_id="full_if_needed",
+        title="필요 시 전체도 허용",
+        summary="기본은 타깃 캡처지만, 근거가 부족할 때만 더 넓은 화면을 허용합니다.",
+    ),
+)
+
+
+def get_visual_capture_scope_option(scope_id: str) -> VisualCaptureScopeOption:
+    for option in VISUAL_CAPTURE_SCOPE_OPTIONS:
+        if option.scope_id == scope_id:
+            return option
+    return VISUAL_CAPTURE_SCOPE_OPTIONS[0]
+
+
+@dataclass(frozen=True)
+class VisualRetentionOption:
+    retention_id: str
+    title: str
+    summary: str
+
+
+VISUAL_RETENTION_OPTIONS: tuple[VisualRetentionOption, ...] = (
+    VisualRetentionOption(
+        retention_id="short",
+        title="짧게 유지",
+        summary="현재 판단과 직전 비교에 필요한 정도로만 짧게 유지합니다.",
+    ),
+    VisualRetentionOption(
+        retention_id="session_only",
+        title="세션 동안만 유지",
+        summary="현재 세션이 끝날 때까지만 시각 증거를 유지합니다.",
+    ),
+)
+
+
+def get_visual_retention_option(retention_id: str) -> VisualRetentionOption:
+    for option in VISUAL_RETENTION_OPTIONS:
+        if option.retention_id == retention_id:
+            return option
+    return VISUAL_RETENTION_OPTIONS[0]
 
 
 @dataclass
@@ -305,6 +430,305 @@ class CodexStrategyConfig:
 
     def selected_mode(self) -> CodexAutomationModeOption:
         return get_codex_automation_mode_option(self.selected_mode_id)
+
+
+@dataclass
+class JudgmentConfig:
+    engine_mode_id: str = DEFAULT_JUDGMENT_ENGINE_MODE_ID
+    model_name: str = DEFAULT_JUDGMENT_MODEL_NAME
+    confidence_threshold: float = DEFAULT_JUDGMENT_CONFIDENCE_THRESHOLD
+    max_history_items: int = 8
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "JudgmentConfig":
+        return cls(
+            engine_mode_id=data.get("engine_mode_id", DEFAULT_JUDGMENT_ENGINE_MODE_ID),
+            model_name=data.get("model_name", DEFAULT_JUDGMENT_MODEL_NAME),
+            confidence_threshold=float(data.get("confidence_threshold", DEFAULT_JUDGMENT_CONFIDENCE_THRESHOLD) or 0.0),
+            max_history_items=int(data.get("max_history_items", 8) or 8),
+        )
+
+    def selected_mode(self) -> JudgmentEngineModeOption:
+        return get_judgment_engine_mode_option(self.engine_mode_id)
+
+
+@dataclass
+class JudgmentResult:
+    decision: str = ""
+    reason: str = ""
+    confidence: float = 0.0
+    risk_level: str = "medium"
+    message_to_user: str = ""
+    needs_user_confirmation: bool = False
+    next_prompt_to_codex: str | None = None
+    evidence_summary: list[str] = field(default_factory=list)
+    follow_up_actions: list[str] = field(default_factory=list)
+    source: str = ""
+    validation_notes: list[str] = field(default_factory=list)
+    evaluated_at: str = ""
+    raw_response: str = ""
+
+    @property
+    def has_result(self) -> bool:
+        return bool(self.decision or self.reason or self.evaluated_at)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "JudgmentResult":
+        return cls(
+            decision=data.get("decision", ""),
+            reason=data.get("reason", ""),
+            confidence=float(data.get("confidence", 0.0) or 0.0),
+            risk_level=data.get("risk_level", "medium"),
+            message_to_user=data.get("message_to_user", ""),
+            needs_user_confirmation=bool(data.get("needs_user_confirmation", False)),
+            next_prompt_to_codex=data.get("next_prompt_to_codex"),
+            evidence_summary=[str(item) for item in data.get("evidence_summary", []) if str(item).strip()],
+            follow_up_actions=[str(item) for item in data.get("follow_up_actions", []) if str(item).strip()],
+            source=data.get("source", ""),
+            validation_notes=[str(item) for item in data.get("validation_notes", []) if str(item).strip()],
+            evaluated_at=data.get("evaluated_at", ""),
+            raw_response=data.get("raw_response", ""),
+        )
+
+
+@dataclass
+class JudgmentHistoryEntry:
+    timestamp: str = ""
+    decision: str = ""
+    confidence: float = 0.0
+    risk_level: str = "medium"
+    source: str = ""
+    message_to_user: str = ""
+    reason: str = ""
+
+    def display_line(self) -> str:
+        decision = self.decision or "unknown"
+        confidence_text = f"{self.confidence:.2f}"
+        stamp = self.timestamp.replace("T", " ") if self.timestamp else "시각 없음"
+        return f"[{stamp}] {decision} | conf {confidence_text} | risk {self.risk_level} | {self.message_to_user or self.reason}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "JudgmentHistoryEntry":
+        return cls(
+            timestamp=data.get("timestamp", ""),
+            decision=data.get("decision", ""),
+            confidence=float(data.get("confidence", 0.0) or 0.0),
+            risk_level=data.get("risk_level", "medium"),
+            source=data.get("source", ""),
+            message_to_user=data.get("message_to_user", ""),
+            reason=data.get("reason", ""),
+        )
+
+
+@dataclass
+class VisualSupervisorConfig:
+    target_mode_id: str = DEFAULT_VISUAL_TARGET_MODE_ID
+    capture_scope_id: str = DEFAULT_VISUAL_CAPTURE_SCOPE_ID
+    retention_hint_id: str = DEFAULT_VISUAL_RETENTION_HINT_ID
+    sensitive_content_risk: str = DEFAULT_VISUAL_SENSITIVE_RISK
+    expected_page: str = ""
+    expected_signals_text: str = ""
+    disallowed_signals_text: str = ""
+    observation_focus_text: str = ""
+    observed_notes_text: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VisualSupervisorConfig":
+        return cls(
+            target_mode_id=data.get("target_mode_id", DEFAULT_VISUAL_TARGET_MODE_ID),
+            capture_scope_id=data.get("capture_scope_id", DEFAULT_VISUAL_CAPTURE_SCOPE_ID),
+            retention_hint_id=data.get("retention_hint_id", DEFAULT_VISUAL_RETENTION_HINT_ID),
+            sensitive_content_risk=data.get("sensitive_content_risk", DEFAULT_VISUAL_SENSITIVE_RISK),
+            expected_page=data.get("expected_page", ""),
+            expected_signals_text=data.get("expected_signals_text", ""),
+            disallowed_signals_text=data.get("disallowed_signals_text", ""),
+            observation_focus_text=data.get("observation_focus_text", ""),
+            observed_notes_text=data.get("observed_notes_text", ""),
+        )
+
+    def target_mode(self) -> VisualTargetModeOption:
+        return get_visual_target_mode_option(self.target_mode_id)
+
+    def capture_scope(self) -> VisualCaptureScopeOption:
+        return get_visual_capture_scope_option(self.capture_scope_id)
+
+    def retention_hint(self) -> VisualRetentionOption:
+        return get_visual_retention_option(self.retention_hint_id)
+
+    def expected_signals(self) -> list[str]:
+        return [line.strip("-• ").strip() for line in self.expected_signals_text.splitlines() if line.strip()]
+
+    def disallowed_signals(self) -> list[str]:
+        return [line.strip("-• ").strip() for line in self.disallowed_signals_text.splitlines() if line.strip()]
+
+    def observation_focus(self) -> list[str]:
+        return [line.strip("-• ").strip() for line in self.observation_focus_text.splitlines() if line.strip()]
+
+
+@dataclass
+class VisualEvidenceResult:
+    target_type: str = ""
+    target_label: str = ""
+    contradiction_detected: bool = False
+    contradiction_level: str = "none"
+    contradiction_reason: str = ""
+    expected_summary: str = ""
+    observed_summary: str = ""
+    decision_hint: str = "continue"
+    message_to_user: str = ""
+    evidence_summary: list[str] = field(default_factory=list)
+    mismatch_signals: list[str] = field(default_factory=list)
+    source: str = ""
+    evaluated_at: str = ""
+    raw_response: str = ""
+
+    @property
+    def has_result(self) -> bool:
+        return bool(self.target_type or self.observed_summary or self.evaluated_at)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VisualEvidenceResult":
+        return cls(
+            target_type=data.get("target_type", ""),
+            target_label=data.get("target_label", ""),
+            contradiction_detected=bool(data.get("contradiction_detected", False)),
+            contradiction_level=data.get("contradiction_level", "none"),
+            contradiction_reason=data.get("contradiction_reason", ""),
+            expected_summary=data.get("expected_summary", ""),
+            observed_summary=data.get("observed_summary", ""),
+            decision_hint=data.get("decision_hint", "continue"),
+            message_to_user=data.get("message_to_user", ""),
+            evidence_summary=[str(item) for item in data.get("evidence_summary", []) if str(item).strip()],
+            mismatch_signals=[str(item) for item in data.get("mismatch_signals", []) if str(item).strip()],
+            source=data.get("source", ""),
+            evaluated_at=data.get("evaluated_at", ""),
+            raw_response=data.get("raw_response", ""),
+        )
+
+
+@dataclass
+class VisualEvidenceHistoryEntry:
+    timestamp: str = ""
+    target_label: str = ""
+    contradiction_level: str = "none"
+    decision_hint: str = "continue"
+    message_to_user: str = ""
+
+    def display_line(self) -> str:
+        stamp = self.timestamp.replace("T", " ") if self.timestamp else "시각 없음"
+        return f"[{stamp}] {self.target_label or 'target'} | {self.contradiction_level} | {self.decision_hint} | {self.message_to_user}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VisualEvidenceHistoryEntry":
+        return cls(
+            timestamp=data.get("timestamp", ""),
+            target_label=data.get("target_label", ""),
+            contradiction_level=data.get("contradiction_level", "none"),
+            decision_hint=data.get("decision_hint", "continue"),
+            message_to_user=data.get("message_to_user", ""),
+        )
+
+
+@dataclass
+class VoiceConfig:
+    language_code: str = DEFAULT_VOICE_LANGUAGE
+    auto_brief_enabled: bool = True
+    confirmation_enabled: bool = True
+    spoken_feedback_enabled: bool = True
+    ambient_ready_enabled: bool = False
+    microphone_name: str = ""
+    speaker_name: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VoiceConfig":
+        return cls(
+            language_code=data.get("language_code", DEFAULT_VOICE_LANGUAGE),
+            auto_brief_enabled=bool(data.get("auto_brief_enabled", True)),
+            confirmation_enabled=bool(data.get("confirmation_enabled", True)),
+            spoken_feedback_enabled=bool(data.get("spoken_feedback_enabled", True)),
+            ambient_ready_enabled=bool(data.get("ambient_ready_enabled", False)),
+            microphone_name=data.get("microphone_name", ""),
+            speaker_name=data.get("speaker_name", ""),
+        )
+
+
+@dataclass
+class VoiceCommandResult:
+    transcript_text: str = ""
+    normalized_intent_id: str = ""
+    intent_confidence: float = 0.0
+    action_id: str = ""
+    action_status: str = ""
+    message_to_user: str = ""
+    spoken_briefing_text: str = ""
+    clarification_question: str = ""
+    requires_confirmation: bool = False
+    source: str = ""
+    evaluated_at: str = ""
+    raw_response: str = ""
+
+    @property
+    def has_result(self) -> bool:
+        return bool(self.transcript_text or self.normalized_intent_id or self.evaluated_at)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VoiceCommandResult":
+        return cls(
+            transcript_text=data.get("transcript_text", ""),
+            normalized_intent_id=data.get("normalized_intent_id", ""),
+            intent_confidence=float(data.get("intent_confidence", 0.0) or 0.0),
+            action_id=data.get("action_id", ""),
+            action_status=data.get("action_status", ""),
+            message_to_user=data.get("message_to_user", ""),
+            spoken_briefing_text=data.get("spoken_briefing_text", ""),
+            clarification_question=data.get("clarification_question", ""),
+            requires_confirmation=bool(data.get("requires_confirmation", False)),
+            source=data.get("source", ""),
+            evaluated_at=data.get("evaluated_at", ""),
+            raw_response=data.get("raw_response", ""),
+        )
+
+
+@dataclass
+class VoiceHistoryEntry:
+    timestamp: str = ""
+    transcript_excerpt: str = ""
+    intent_id: str = ""
+    action_status: str = ""
+    message_to_user: str = ""
+
+    def display_line(self) -> str:
+        stamp = self.timestamp.replace("T", " ") if self.timestamp else "시간 없음"
+        excerpt = self.transcript_excerpt or "voice input"
+        return f"[{stamp}] {self.intent_id or 'unknown'} | {self.action_status or 'pending'} | {excerpt}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VoiceHistoryEntry":
+        return cls(
+            timestamp=data.get("timestamp", ""),
+            transcript_excerpt=data.get("transcript_excerpt", ""),
+            intent_id=data.get("intent_id", ""),
+            action_status=data.get("action_status", ""),
+            message_to_user=data.get("message_to_user", ""),
+        )
 
 
 @dataclass
@@ -473,6 +897,9 @@ class AutomationConfig:
 class SessionConfig:
     project: ProjectContext = field(default_factory=ProjectContext)
     codex_strategy: CodexStrategyConfig = field(default_factory=CodexStrategyConfig)
+    judgment: JudgmentConfig = field(default_factory=JudgmentConfig)
+    visual: VisualSupervisorConfig = field(default_factory=VisualSupervisorConfig)
+    voice: VoiceConfig = field(default_factory=VoiceConfig)
     policy: PolicyConfig = field(default_factory=PolicyConfig)
     window: WindowTarget = field(default_factory=WindowTarget)
     automation: AutomationConfig = field(default_factory=AutomationConfig)
@@ -484,6 +911,9 @@ class SessionConfig:
     def from_dict(cls, data: dict[str, Any]) -> "SessionConfig":
         project = ProjectContext(**data.get("project", {}))
         codex_strategy = CodexStrategyConfig.from_dict(data.get("codex_strategy", {}))
+        judgment = JudgmentConfig.from_dict(data.get("judgment", {}))
+        visual = VisualSupervisorConfig.from_dict(data.get("visual", {}))
+        voice = VoiceConfig.from_dict(data.get("voice", {}))
         policy = PolicyConfig.from_dict(data.get("policy", {}), legacy_master_policy=project.operator_rules)
         project.operator_rules = policy.master_policy or DEFAULT_RULES
         window = WindowTarget(**data.get("window", {}))
@@ -491,6 +921,9 @@ class SessionConfig:
         return cls(
             project=project,
             codex_strategy=codex_strategy,
+            judgment=judgment,
+            visual=visual,
+            voice=voice,
             policy=policy,
             window=window,
             automation=automation,
@@ -574,6 +1007,23 @@ class RuntimeState:
     prompt_generated: str = ""
     prompt_draft: str = ""
     prompt_dirty: bool = False
+    last_judgment_packet: str = ""
+    last_judgment_prompt: str = ""
+    last_judgment_response: str = ""
+    last_judgment: JudgmentResult = field(default_factory=JudgmentResult)
+    judgment_history: list[JudgmentHistoryEntry] = field(default_factory=list)
+    last_visual_packet: str = ""
+    last_visual_prompt: str = ""
+    last_visual_summary: str = ""
+    last_visual_result: VisualEvidenceResult = field(default_factory=VisualEvidenceResult)
+    visual_history: list[VisualEvidenceHistoryEntry] = field(default_factory=list)
+    voice_capture_state: str = "idle"
+    voice_pending_action_id: str = ""
+    voice_pending_confirmation_text: str = ""
+    voice_last_transcript: str = ""
+    voice_last_briefing: str = ""
+    last_voice_result: VoiceCommandResult = field(default_factory=VoiceCommandResult)
+    voice_history: list[VoiceHistoryEntry] = field(default_factory=list)
 
     def reset_stability(self) -> None:
         self.stable_cycles = 0
@@ -610,6 +1060,84 @@ class RuntimeState:
         self.operator_paused = False
         self.operator_pause_reason = ""
 
+    def remember_judgment(
+        self,
+        result: JudgmentResult,
+        *,
+        packet_text: str,
+        prompt_text: str,
+        response_text: str,
+        max_history_items: int,
+    ) -> None:
+        self.last_judgment = JudgmentResult.from_dict(result.to_dict())
+        self.last_judgment_packet = packet_text
+        self.last_judgment_prompt = prompt_text
+        self.last_judgment_response = response_text
+        history_entry = JudgmentHistoryEntry(
+            timestamp=result.evaluated_at,
+            decision=result.decision,
+            confidence=result.confidence,
+            risk_level=result.risk_level,
+            source=result.source,
+            message_to_user=result.message_to_user,
+            reason=result.reason,
+        )
+        self.judgment_history.insert(0, history_entry)
+        if max_history_items > 0:
+            self.judgment_history = self.judgment_history[:max_history_items]
+
+    def remember_visual_result(
+        self,
+        result: VisualEvidenceResult,
+        *,
+        packet_text: str,
+        prompt_text: str,
+        summary_text: str,
+        max_history_items: int,
+    ) -> None:
+        self.last_visual_result = VisualEvidenceResult.from_dict(result.to_dict())
+        self.last_visual_packet = packet_text
+        self.last_visual_prompt = prompt_text
+        self.last_visual_summary = summary_text
+        history_entry = VisualEvidenceHistoryEntry(
+            timestamp=result.evaluated_at,
+            target_label=result.target_label,
+            contradiction_level=result.contradiction_level,
+            decision_hint=result.decision_hint,
+            message_to_user=result.message_to_user,
+        )
+        self.visual_history.insert(0, history_entry)
+        if max_history_items > 0:
+            self.visual_history = self.visual_history[:max_history_items]
+
+    def set_voice_pending_confirmation(self, action_id: str, text: str) -> None:
+        self.voice_pending_action_id = action_id
+        self.voice_pending_confirmation_text = text
+
+    def clear_voice_pending_confirmation(self) -> None:
+        self.voice_pending_action_id = ""
+        self.voice_pending_confirmation_text = ""
+
+    def remember_voice_result(
+        self,
+        result: VoiceCommandResult,
+        *,
+        max_history_items: int,
+    ) -> None:
+        self.last_voice_result = VoiceCommandResult.from_dict(result.to_dict())
+        self.voice_last_transcript = result.transcript_text
+        self.voice_last_briefing = result.spoken_briefing_text
+        history_entry = VoiceHistoryEntry(
+            timestamp=result.evaluated_at,
+            transcript_excerpt=(result.transcript_text[:80] + "...") if len(result.transcript_text) > 80 else result.transcript_text,
+            intent_id=result.normalized_intent_id,
+            action_status=result.action_status,
+            message_to_user=result.message_to_user,
+        )
+        self.voice_history.insert(0, history_entry)
+        if max_history_items > 0:
+            self.voice_history = self.voice_history[:max_history_items]
+
     def to_persisted_dict(self) -> dict[str, Any]:
         return {
             "next_step_index": self.next_step_index,
@@ -625,6 +1153,23 @@ class RuntimeState:
             "prompt_generated": self.prompt_generated,
             "prompt_draft": self.prompt_draft,
             "prompt_dirty": self.prompt_dirty,
+            "last_judgment_packet": self.last_judgment_packet,
+            "last_judgment_prompt": self.last_judgment_prompt,
+            "last_judgment_response": self.last_judgment_response,
+            "last_judgment": self.last_judgment.to_dict(),
+            "judgment_history": [item.to_dict() for item in self.judgment_history],
+            "last_visual_packet": self.last_visual_packet,
+            "last_visual_prompt": self.last_visual_prompt,
+            "last_visual_summary": self.last_visual_summary,
+            "last_visual_result": self.last_visual_result.to_dict(),
+            "visual_history": [item.to_dict() for item in self.visual_history],
+            "voice_capture_state": self.voice_capture_state,
+            "voice_pending_action_id": self.voice_pending_action_id,
+            "voice_pending_confirmation_text": self.voice_pending_confirmation_text,
+            "voice_last_transcript": self.voice_last_transcript,
+            "voice_last_briefing": self.voice_last_briefing,
+            "last_voice_result": self.last_voice_result.to_dict(),
+            "voice_history": [item.to_dict() for item in self.voice_history],
         }
 
     @classmethod
@@ -646,6 +1191,35 @@ class RuntimeState:
             prompt_generated=data.get("prompt_generated", ""),
             prompt_draft=data.get("prompt_draft", ""),
             prompt_dirty=bool(data.get("prompt_dirty", False)),
+            last_judgment_packet=data.get("last_judgment_packet", ""),
+            last_judgment_prompt=data.get("last_judgment_prompt", ""),
+            last_judgment_response=data.get("last_judgment_response", ""),
+            last_judgment=JudgmentResult.from_dict(data.get("last_judgment", {})),
+            judgment_history=[
+                JudgmentHistoryEntry.from_dict(item)
+                for item in data.get("judgment_history", [])
+                if isinstance(item, dict)
+            ],
+            last_visual_packet=data.get("last_visual_packet", ""),
+            last_visual_prompt=data.get("last_visual_prompt", ""),
+            last_visual_summary=data.get("last_visual_summary", ""),
+            last_visual_result=VisualEvidenceResult.from_dict(data.get("last_visual_result", {})),
+            visual_history=[
+                VisualEvidenceHistoryEntry.from_dict(item)
+                for item in data.get("visual_history", [])
+                if isinstance(item, dict)
+            ],
+            voice_capture_state=data.get("voice_capture_state", "idle"),
+            voice_pending_action_id=data.get("voice_pending_action_id", ""),
+            voice_pending_confirmation_text=data.get("voice_pending_confirmation_text", ""),
+            voice_last_transcript=data.get("voice_last_transcript", ""),
+            voice_last_briefing=data.get("voice_last_briefing", ""),
+            last_voice_result=VoiceCommandResult.from_dict(data.get("last_voice_result", {})),
+            voice_history=[
+                VoiceHistoryEntry.from_dict(item)
+                for item in data.get("voice_history", [])
+                if isinstance(item, dict)
+            ],
         )
 
 

@@ -192,25 +192,31 @@ v1에서는 아래 결정만 허용합니다.
 ### Release 1
 
 - 정책 편집 자리 확보
-- 더미 판단 슬롯
-- 구조화 출력 계약 확정
+- 판단 엔진을 붙일 자리 확보
+- 구조화 계약 방향 정리
 
 ### Release 2
 
-- 실제 Codex 진행 판단 연결
-- 단계 진행 / 보류 / 재시도 분기
+- Codex-first 운영 문맥 정리
+- prompt / 정책 / 운영 프로필 바닥 정리
 
 ### Release 3
 
-- 화면 인식 결과를 입력으로 사용
-- 브라우저 결과 판독 기반 판단 강화
+- no automation / thread / project 운영 흐름 확정
+- runboard / triage bridge 같은 운영 문맥 확보
 
 ### Release 4
 
-- 장기 운영 히스토리와 실패 패턴을 반영
-- 프로젝트별 판단 일관성 강화
+- 실제 structured judgment 연결
+- continue / wait / retry / pause / ask_user 분기
+- confidence / risk 기반 안전 가드
 
 ### Release 5
+
+- 화면 인식은 `항상 기본`이 아니라 `필요할 때만 켜는 visual evidence`로 사용
+- 브라우저 결과 판독과 claim-vs-screen mismatch 기반 판단 강화
+
+### Release 6
 
 - 음성 질의응답과 동일 판단 엔진 공유
 

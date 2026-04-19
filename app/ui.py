@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import queue
 import threading
 import time
@@ -12,7 +13,11 @@ from app.automation.windows_ui import WindowRect, WindowResolution, WindowsDeskt
 from app.models import (
     CODEX_AUTOMATION_MODE_OPTIONS,
     CODEX_AUTOMATION_PRESETS,
+    JUDGMENT_ENGINE_MODE_OPTIONS,
     POLICY_SECTION_SPECS,
+    VISUAL_CAPTURE_SCOPE_OPTIONS,
+    VISUAL_RETENTION_OPTIONS,
+    VISUAL_TARGET_MODE_OPTIONS,
     PersistedSessionState,
     PromptPreview,
     RuntimeState,
@@ -67,6 +72,17 @@ class JavisApp:
         self._current_automation_runboard = ""
         self._current_triage_bridge = ""
         self._current_native_fallback_matrix = ""
+        self._current_judgment_packet = ""
+        self._current_judgment_prompt = ""
+        self._current_judgment_response = ""
+        self._current_judgment_timeline = ""
+        self._current_visual_packet = ""
+        self._current_visual_prompt = ""
+        self._current_visual_summary = ""
+        self._current_visual_timeline = ""
+        self._current_voice_result = ""
+        self._current_voice_briefing = ""
+        self._current_voice_timeline = ""
 
         self._build_styles()
         self._build_popup_shell()
@@ -271,6 +287,14 @@ class JavisApp:
         self.codex_strategy_label_by_id: dict[str, str] = {}
         self.codex_mode_choice_by_label: dict[str, str] = {}
         self.codex_mode_label_by_id: dict[str, str] = {}
+        self.judgment_mode_choice_by_label: dict[str, str] = {}
+        self.judgment_mode_label_by_id: dict[str, str] = {}
+        self.visual_target_choice_by_label: dict[str, str] = {}
+        self.visual_target_label_by_id: dict[str, str] = {}
+        self.visual_scope_choice_by_label: dict[str, str] = {}
+        self.visual_scope_label_by_id: dict[str, str] = {}
+        self.visual_retention_choice_by_label: dict[str, str] = {}
+        self.visual_retention_label_by_id: dict[str, str] = {}
 
         header = ttk.Frame(parent, padding=12)
         header.grid(row=0, column=0, columnspan=2, sticky="ew")
@@ -320,7 +344,8 @@ class JavisApp:
         codex_section = self._create_control_section("codex", "Codex 제어")
         evidence_section = self._create_control_section("evidence", "증거 / 로그")
         safety_section = self._create_control_section("safety", "안전 / 자동화")
-        model_voice_section = self._create_control_section("model_voice", "모델 / 음성")
+        model_voice_section = self._create_control_section("model_voice", "판단 / 모델 / 음성")
+        visual_section = self._create_control_section("visual", "시각 감독")
         advanced_section = self._create_control_section("advanced", "고급")
 
         project_section.columnconfigure(0, weight=1)
@@ -1061,15 +1086,492 @@ class JavisApp:
         self.log_text.grid(row=0, column=0, sticky="nsew")
 
         model_voice_section.columnconfigure(0, weight=1)
+        model_voice_section.rowconfigure(3, weight=1)
+        model_voice_section.rowconfigure(6, weight=1)
+
+        judgment_intro = ttk.LabelFrame(model_voice_section, text="Judgment Overlay 안내", padding=12)
+        judgment_intro.grid(row=0, column=0, sticky="ew")
+        judgment_intro.columnconfigure(0, weight=1)
         ttk.Label(
-            model_voice_section,
+            judgment_intro,
             text=(
-                "Release 1에서는 모델 / 음성 섹션을 구조만 먼저 준비합니다.\n"
-                "이후 OpenAI 모델 선택, push-to-talk, TTS, 음성 브리핑 설정이 이 영역으로 확장됩니다."
+                "Phase 4에서는 OpenAI-ready 판단 엔진을 제품 안에 먼저 붙입니다. "
+                "현재는 안전한 규칙 기반 판단을 기본으로 두고, 준비가 되면 OpenAI 판단으로 확장할 수 있게 설계합니다."
             ),
             wraplength=760,
             justify="left",
         ).grid(row=0, column=0, sticky="w")
+
+        judgment_settings = ttk.LabelFrame(model_voice_section, text="판단 엔진 설정", padding=12)
+        judgment_settings.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        judgment_settings.columnconfigure(1, weight=1)
+        judgment_settings.columnconfigure(3, weight=1)
+
+        self.judgment_engine_mode_var = StringVar()
+        self.judgment_model_name_var = StringVar(value=self.session.judgment.model_name)
+        self.judgment_confidence_var = StringVar(value=str(self.session.judgment.confidence_threshold))
+        for option in JUDGMENT_ENGINE_MODE_OPTIONS:
+            self.judgment_mode_choice_by_label[option.title] = option.mode_id
+            self.judgment_mode_label_by_id[option.mode_id] = option.title
+
+        ttk.Label(judgment_settings, text="엔진 모드").grid(row=0, column=0, sticky="w", padx=(0, 12))
+        self.judgment_engine_combo = ttk.Combobox(
+            judgment_settings,
+            textvariable=self.judgment_engine_mode_var,
+            state="readonly",
+            values=list(self.judgment_mode_choice_by_label.keys()),
+        )
+        self.judgment_engine_combo.grid(row=0, column=1, sticky="ew")
+        self.judgment_engine_combo.bind("<<ComboboxSelected>>", self._on_judgment_engine_mode_selected)
+
+        ttk.Label(judgment_settings, text="모델 이름").grid(row=0, column=2, sticky="w", padx=(16, 12))
+        ttk.Entry(judgment_settings, textvariable=self.judgment_model_name_var).grid(row=0, column=3, sticky="ew")
+
+        ttk.Label(judgment_settings, text="confidence threshold").grid(row=1, column=0, sticky="w", pady=(10, 0), padx=(0, 12))
+        ttk.Entry(judgment_settings, textvariable=self.judgment_confidence_var).grid(
+            row=1, column=1, sticky="ew", pady=(10, 0)
+        )
+
+        judgment_actions = ttk.Frame(judgment_settings)
+        judgment_actions.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(12, 0))
+        for index, (label, command) in enumerate(
+            [
+                ("재판단 실행", self.run_judgment_now),
+                ("패킷 복사", self.copy_judgment_packet),
+                ("프롬프트 복사", self.copy_judgment_prompt),
+                ("응답 복사", self.copy_judgment_response),
+                ("타임라인 복사", self.copy_judgment_timeline),
+            ]
+        ):
+            ttk.Button(judgment_actions, text=label, command=command).grid(
+                row=0,
+                column=index,
+                sticky="ew",
+                padx=(0, 8 if index < 4 else 0),
+            )
+            judgment_actions.columnconfigure(index, weight=1)
+
+        judgment_status = ttk.LabelFrame(model_voice_section, text="현재 판단 상태", padding=12)
+        judgment_status.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        judgment_status.columnconfigure(0, weight=1)
+        self.judgment_engine_status_var = StringVar(value="판단 엔진 상태를 불러오는 중입니다.")
+        self.judgment_result_status_var = StringVar(value="아직 판단 결과가 없습니다.")
+        self.judgment_source_status_var = StringVar(value="source / confidence / risk 정보가 여기에 표시됩니다.")
+        self.judgment_follow_up_var = StringVar(value="후속 행동 요약이 여기에 표시됩니다.")
+        ttk.Label(judgment_status, textvariable=self.judgment_engine_status_var, wraplength=760, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(judgment_status, textvariable=self.judgment_result_status_var, wraplength=760, justify="left").grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Label(judgment_status, textvariable=self.judgment_source_status_var, wraplength=760, justify="left").grid(
+            row=2, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Label(judgment_status, textvariable=self.judgment_follow_up_var, wraplength=760, justify="left").grid(
+            row=3, column=0, sticky="w", pady=(6, 0)
+        )
+
+        judgment_body = ttk.Frame(model_voice_section)
+        judgment_body.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        judgment_body.columnconfigure(0, weight=1)
+        judgment_body.columnconfigure(1, weight=1)
+        judgment_body.rowconfigure(0, weight=1)
+        judgment_body.rowconfigure(1, weight=1)
+
+        packet_frame = ttk.LabelFrame(judgment_body, text="Judgment Packet", padding=12)
+        packet_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=(0, 8))
+        packet_frame.columnconfigure(0, weight=1)
+        packet_frame.rowconfigure(1, weight=1)
+        self.judgment_packet_state_var = StringVar(value="판단 입력 패킷 초안이 여기에 표시됩니다.")
+        ttk.Label(packet_frame, textvariable=self.judgment_packet_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.judgment_packet_preview = ScrolledText(packet_frame, height=12, wrap="word", state="disabled")
+        self.judgment_packet_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        prompt_frame = ttk.LabelFrame(judgment_body, text="Judgment Prompt", padding=12)
+        prompt_frame.grid(row=0, column=1, sticky="nsew", pady=(0, 8))
+        prompt_frame.columnconfigure(0, weight=1)
+        prompt_frame.rowconfigure(1, weight=1)
+        self.judgment_prompt_state_var = StringVar(value="판단 프롬프트 초안이 여기에 표시됩니다.")
+        ttk.Label(prompt_frame, textvariable=self.judgment_prompt_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.judgment_prompt_preview = ScrolledText(prompt_frame, height=12, wrap="word", state="disabled")
+        self.judgment_prompt_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        response_frame = ttk.LabelFrame(judgment_body, text="Validated Response", padding=12)
+        response_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
+        response_frame.columnconfigure(0, weight=1)
+        response_frame.rowconfigure(1, weight=1)
+        self.judgment_response_state_var = StringVar(value="검증된 판단 응답이 여기에 표시됩니다.")
+        ttk.Label(response_frame, textvariable=self.judgment_response_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.judgment_response_preview = ScrolledText(response_frame, height=12, wrap="word", state="disabled")
+        self.judgment_response_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        timeline_frame = ttk.LabelFrame(judgment_body, text="Timeline / Evidence Digest", padding=12)
+        timeline_frame.grid(row=1, column=1, sticky="nsew")
+        timeline_frame.columnconfigure(0, weight=1)
+        timeline_frame.rowconfigure(1, weight=1)
+        self.judgment_timeline_state_var = StringVar(value="최근 판단 이력과 근거 요약이 여기에 표시됩니다.")
+        ttk.Label(timeline_frame, textvariable=self.judgment_timeline_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.judgment_timeline_preview = ScrolledText(timeline_frame, height=12, wrap="word", state="disabled")
+        self.judgment_timeline_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        voice_intro = ttk.LabelFrame(model_voice_section, text="Voice Assistant 안내", padding=12)
+        voice_intro.grid(row=4, column=0, sticky="ew", pady=(12, 0))
+        voice_intro.columnconfigure(0, weight=1)
+        ttk.Label(
+            voice_intro,
+            text=(
+                "Phase 6에서는 voice를 새 판단 엔진으로 만들지 않고, 기존 judgment / visual 흐름을 "
+                "말로 더 쉽게 쓰는 상위 인터페이스로 올립니다. 지금 단계에서는 push-to-talk, "
+                "transcript 정규화, spoken briefing, confirmation gate를 먼저 붙입니다."
+            ),
+            wraplength=760,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+
+        voice_settings = ttk.LabelFrame(model_voice_section, text="음성 설정", padding=12)
+        voice_settings.grid(row=5, column=0, sticky="ew", pady=(12, 0))
+        voice_settings.columnconfigure(1, weight=1)
+        voice_settings.columnconfigure(3, weight=1)
+
+        self.voice_language_var = StringVar(value=self.session.voice.language_code)
+        self.voice_microphone_var = StringVar(value=self.session.voice.microphone_name)
+        self.voice_speaker_var = StringVar(value=self.session.voice.speaker_name)
+        self.voice_auto_brief_var = BooleanVar(value=self.session.voice.auto_brief_enabled)
+        self.voice_confirmation_var = BooleanVar(value=self.session.voice.confirmation_enabled)
+        self.voice_spoken_feedback_var = BooleanVar(value=self.session.voice.spoken_feedback_enabled)
+        self.voice_ambient_ready_var = BooleanVar(value=self.session.voice.ambient_ready_enabled)
+
+        ttk.Label(voice_settings, text="언어 코드").grid(row=0, column=0, sticky="w", padx=(0, 12))
+        ttk.Entry(voice_settings, textvariable=self.voice_language_var).grid(row=0, column=1, sticky="ew")
+        ttk.Label(voice_settings, text="마이크").grid(row=0, column=2, sticky="w", padx=(16, 12))
+        ttk.Entry(voice_settings, textvariable=self.voice_microphone_var).grid(row=0, column=3, sticky="ew")
+
+        ttk.Label(voice_settings, text="스피커").grid(row=1, column=0, sticky="w", pady=(10, 0), padx=(0, 12))
+        ttk.Entry(voice_settings, textvariable=self.voice_speaker_var).grid(row=1, column=1, sticky="ew", pady=(10, 0))
+
+        voice_toggle_row = ttk.Frame(voice_settings)
+        voice_toggle_row.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(12, 0))
+        for index, (label, variable) in enumerate(
+            [
+                ("자동 브리핑", self.voice_auto_brief_var),
+                ("확인 게이트", self.voice_confirmation_var),
+                ("spoken feedback", self.voice_spoken_feedback_var),
+                ("ambient ready", self.voice_ambient_ready_var),
+            ]
+        ):
+            ttk.Checkbutton(voice_toggle_row, text=label, variable=variable).grid(
+                row=0,
+                column=index,
+                sticky="w",
+                padx=(0, 12 if index < 3 else 0),
+            )
+            voice_toggle_row.columnconfigure(index, weight=1)
+
+        voice_status = ttk.LabelFrame(model_voice_section, text="현재 음성 상태", padding=12)
+        voice_status.grid(row=6, column=0, sticky="ew", pady=(12, 0))
+        voice_status.columnconfigure(0, weight=1)
+        self.voice_capture_status_var = StringVar(value="voice capture 상태가 여기 표시됩니다.")
+        self.voice_result_status_var = StringVar(value="아직 voice intent 결과가 없습니다.")
+        self.voice_confirmation_status_var = StringVar(value="대기 중인 voice confirmation이 없습니다.")
+        ttk.Label(voice_status, textvariable=self.voice_capture_status_var, wraplength=760, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(voice_status, textvariable=self.voice_result_status_var, wraplength=760, justify="left").grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Label(
+            voice_status,
+            textvariable=self.voice_confirmation_status_var,
+            wraplength=760,
+            justify="left",
+        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
+
+        voice_body = ttk.Frame(model_voice_section)
+        voice_body.grid(row=7, column=0, sticky="nsew", pady=(12, 0))
+        voice_body.columnconfigure(0, weight=1)
+        voice_body.columnconfigure(1, weight=1)
+        voice_body.rowconfigure(0, weight=1)
+        voice_body.rowconfigure(1, weight=1)
+
+        voice_input_frame = ttk.LabelFrame(voice_body, text="Push-to-Talk / Transcript", padding=12)
+        voice_input_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=(0, 8))
+        voice_input_frame.columnconfigure(0, weight=1)
+        voice_input_frame.rowconfigure(1, weight=1)
+        ttk.Label(
+            voice_input_frame,
+            text="push-to-talk 버튼으로 상태를 바꾸고, 현재 단계에서는 transcript를 직접 점검 / 수정할 수 있습니다.",
+            wraplength=360,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+        self.voice_transcript_input = ScrolledText(voice_input_frame, height=10, wrap="word")
+        self.voice_transcript_input.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        voice_actions = ttk.Frame(voice_input_frame)
+        voice_actions.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        for index, (label, command) in enumerate(
+            [
+                ("push-to-talk", self.toggle_voice_capture),
+                ("voice 실행", self.run_voice_command_now),
+                ("브리핑 읽기", self.play_voice_briefing_now),
+                ("확인", self.confirm_pending_voice_action),
+                ("취소", self.cancel_pending_voice_action),
+            ]
+        ):
+            ttk.Button(voice_actions, text=label, command=command).grid(
+                row=0,
+                column=index,
+                sticky="ew",
+                padx=(0, 8 if index < 4 else 0),
+            )
+            voice_actions.columnconfigure(index, weight=1)
+
+        voice_result_frame = ttk.LabelFrame(voice_body, text="Voice Intent Result", padding=12)
+        voice_result_frame.grid(row=0, column=1, sticky="nsew", pady=(0, 8))
+        voice_result_frame.columnconfigure(0, weight=1)
+        voice_result_frame.rowconfigure(1, weight=1)
+        self.voice_result_state_var = StringVar(value="voice intent 결과가 여기 표시됩니다.")
+        ttk.Label(voice_result_frame, textvariable=self.voice_result_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.voice_result_preview = ScrolledText(voice_result_frame, height=10, wrap="word", state="disabled")
+        self.voice_result_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        voice_briefing_frame = ttk.LabelFrame(voice_body, text="Spoken Briefing", padding=12)
+        voice_briefing_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
+        voice_briefing_frame.columnconfigure(0, weight=1)
+        voice_briefing_frame.rowconfigure(1, weight=1)
+        self.voice_briefing_state_var = StringVar(value="spoken briefing 초안이 여기 표시됩니다.")
+        ttk.Label(
+            voice_briefing_frame,
+            textvariable=self.voice_briefing_state_var,
+            wraplength=360,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+        self.voice_briefing_preview = ScrolledText(voice_briefing_frame, height=10, wrap="word", state="disabled")
+        self.voice_briefing_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        voice_timeline_frame = ttk.LabelFrame(voice_body, text="Voice Timeline / Guard", padding=12)
+        voice_timeline_frame.grid(row=1, column=1, sticky="nsew")
+        voice_timeline_frame.columnconfigure(0, weight=1)
+        voice_timeline_frame.rowconfigure(1, weight=1)
+        self.voice_timeline_state_var = StringVar(value="voice history와 confirmation 상태가 여기 표시됩니다.")
+        ttk.Label(
+            voice_timeline_frame,
+            textvariable=self.voice_timeline_state_var,
+            wraplength=360,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+        self.voice_timeline_preview = ScrolledText(voice_timeline_frame, height=10, wrap="word", state="disabled")
+        self.voice_timeline_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        voice_copy_actions = ttk.Frame(model_voice_section)
+        voice_copy_actions.grid(row=8, column=0, sticky="ew", pady=(12, 0))
+        for index, (label, command) in enumerate(
+            [
+                ("voice 결과 복사", self.copy_voice_result),
+                ("브리핑 복사", self.copy_voice_briefing),
+                ("voice timeline 복사", self.copy_voice_timeline),
+            ]
+        ):
+            ttk.Button(voice_copy_actions, text=label, command=command).grid(
+                row=0,
+                column=index,
+                sticky="ew",
+                padx=(0, 8 if index < 2 else 0),
+            )
+            voice_copy_actions.columnconfigure(index, weight=1)
+
+        visual_section.columnconfigure(0, weight=1)
+        visual_section.rowconfigure(3, weight=1)
+
+        visual_intro = ttk.LabelFrame(visual_section, text="Visual Supervisor 안내", padding=12)
+        visual_intro.grid(row=0, column=0, sticky="ew")
+        visual_intro.columnconfigure(0, weight=1)
+        ttk.Label(
+            visual_intro,
+            text=(
+                "Phase 5에서는 Codex 네이티브 결과와 현재 판단만으로 부족할 때만 시각 증거를 붙입니다. "
+                "즉, 무조건 OCR을 돌리는 것이 아니라 필요한 화면만 골라 contradiction를 확인하는 감독층입니다."
+            ),
+            wraplength=760,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+
+        visual_settings = ttk.LabelFrame(visual_section, text="시각 감독 설정", padding=12)
+        visual_settings.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        visual_settings.columnconfigure(1, weight=1)
+        visual_settings.columnconfigure(3, weight=1)
+
+        self.visual_target_mode_var = StringVar()
+        self.visual_capture_scope_var = StringVar()
+        self.visual_retention_var = StringVar()
+        self.visual_sensitive_risk_var = StringVar(value=self.session.visual.sensitive_content_risk)
+
+        for option in VISUAL_TARGET_MODE_OPTIONS:
+            self.visual_target_choice_by_label[option.title] = option.mode_id
+            self.visual_target_label_by_id[option.mode_id] = option.title
+        for option in VISUAL_CAPTURE_SCOPE_OPTIONS:
+            self.visual_scope_choice_by_label[option.title] = option.scope_id
+            self.visual_scope_label_by_id[option.scope_id] = option.title
+        for option in VISUAL_RETENTION_OPTIONS:
+            self.visual_retention_choice_by_label[option.title] = option.retention_id
+            self.visual_retention_label_by_id[option.retention_id] = option.title
+
+        ttk.Label(visual_settings, text="타깃 모드").grid(row=0, column=0, sticky="w", padx=(0, 12))
+        self.visual_target_combo = ttk.Combobox(
+            visual_settings,
+            textvariable=self.visual_target_mode_var,
+            state="readonly",
+            values=list(self.visual_target_choice_by_label.keys()),
+        )
+        self.visual_target_combo.grid(row=0, column=1, sticky="ew")
+        self.visual_target_combo.bind("<<ComboboxSelected>>", self._on_visual_settings_changed)
+
+        ttk.Label(visual_settings, text="캡처 범위").grid(row=0, column=2, sticky="w", padx=(16, 12))
+        self.visual_scope_combo = ttk.Combobox(
+            visual_settings,
+            textvariable=self.visual_capture_scope_var,
+            state="readonly",
+            values=list(self.visual_scope_choice_by_label.keys()),
+        )
+        self.visual_scope_combo.grid(row=0, column=3, sticky="ew")
+        self.visual_scope_combo.bind("<<ComboboxSelected>>", self._on_visual_settings_changed)
+
+        ttk.Label(visual_settings, text="보관 힌트").grid(row=1, column=0, sticky="w", pady=(10, 0), padx=(0, 12))
+        self.visual_retention_combo = ttk.Combobox(
+            visual_settings,
+            textvariable=self.visual_retention_var,
+            state="readonly",
+            values=list(self.visual_retention_choice_by_label.keys()),
+        )
+        self.visual_retention_combo.grid(row=1, column=1, sticky="ew", pady=(10, 0))
+        self.visual_retention_combo.bind("<<ComboboxSelected>>", self._on_visual_settings_changed)
+
+        ttk.Label(visual_settings, text="민감도 위험").grid(row=1, column=2, sticky="w", pady=(10, 0), padx=(16, 12))
+        ttk.Entry(visual_settings, textvariable=self.visual_sensitive_risk_var).grid(row=1, column=3, sticky="ew", pady=(10, 0))
+
+        visual_status = ttk.LabelFrame(visual_section, text="현재 시각 상태", padding=12)
+        visual_status.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        visual_status.columnconfigure(0, weight=1)
+        self.visual_target_status_var = StringVar(value="시각 캡처 planner 상태가 여기에 표시됩니다.")
+        self.visual_summary_status_var = StringVar(value="아직 시각 판단 결과가 없습니다.")
+        self.visual_guard_status_var = StringVar(value="capture safety와 retention 기준이 여기에 표시됩니다.")
+        ttk.Label(visual_status, textvariable=self.visual_target_status_var, wraplength=760, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(visual_status, textvariable=self.visual_summary_status_var, wraplength=760, justify="left").grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Label(visual_status, textvariable=self.visual_guard_status_var, wraplength=760, justify="left").grid(
+            row=2, column=0, sticky="w", pady=(6, 0)
+        )
+
+        visual_inputs = ttk.LabelFrame(visual_section, text="기대 화면 / 관찰 메모", padding=12)
+        visual_inputs.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        visual_inputs.columnconfigure(0, weight=1)
+        visual_inputs.columnconfigure(1, weight=1)
+        visual_inputs.rowconfigure(1, weight=1)
+        visual_inputs.rowconfigure(3, weight=1)
+        visual_inputs.rowconfigure(5, weight=1)
+
+        ttk.Label(visual_inputs, text="기대 페이지 / 화면").grid(row=0, column=0, sticky="w")
+        self.visual_expected_page = ScrolledText(visual_inputs, height=3, wrap="word")
+        self.visual_expected_page.grid(row=1, column=0, sticky="nsew", padx=(0, 8), pady=(4, 8))
+
+        ttk.Label(visual_inputs, text="관찰 포인트").grid(row=0, column=1, sticky="w")
+        self.visual_focus = ScrolledText(visual_inputs, height=3, wrap="word")
+        self.visual_focus.grid(row=1, column=1, sticky="nsew", pady=(4, 8))
+
+        ttk.Label(visual_inputs, text="기대 신호").grid(row=2, column=0, sticky="w")
+        self.visual_expected_signals = ScrolledText(visual_inputs, height=4, wrap="word")
+        self.visual_expected_signals.grid(row=3, column=0, sticky="nsew", padx=(0, 8), pady=(4, 8))
+
+        ttk.Label(visual_inputs, text="금지 / mismatch 신호").grid(row=2, column=1, sticky="w")
+        self.visual_disallowed_signals = ScrolledText(visual_inputs, height=4, wrap="word")
+        self.visual_disallowed_signals.grid(row=3, column=1, sticky="nsew", pady=(4, 8))
+
+        ttk.Label(visual_inputs, text="현재 관찰 메모").grid(row=4, column=0, columnspan=2, sticky="w")
+        self.visual_observed_notes = ScrolledText(visual_inputs, height=5, wrap="word")
+        self.visual_observed_notes.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=(4, 0))
+
+        visual_actions = ttk.Frame(visual_section)
+        visual_actions.grid(row=4, column=0, sticky="ew", pady=(12, 0))
+        for index, (label, command) in enumerate(
+            [
+                ("시각 패킷 새로고침", self.refresh_visual_evidence),
+                ("시각 재판단", self.run_visual_rejudge_now),
+                ("패킷 복사", self.copy_visual_packet),
+                ("관찰 프롬프트 복사", self.copy_visual_prompt),
+                ("요약 복사", self.copy_visual_summary),
+                ("타임라인 복사", self.copy_visual_timeline),
+            ]
+        ):
+            ttk.Button(visual_actions, text=label, command=command).grid(
+                row=0,
+                column=index,
+                sticky="ew",
+                padx=(0, 8 if index < 5 else 0),
+            )
+            visual_actions.columnconfigure(index, weight=1)
+
+        visual_body = ttk.Frame(visual_section)
+        visual_body.grid(row=5, column=0, sticky="nsew", pady=(12, 0))
+        visual_body.columnconfigure(0, weight=1)
+        visual_body.columnconfigure(1, weight=1)
+        visual_body.rowconfigure(0, weight=1)
+        visual_body.rowconfigure(1, weight=1)
+
+        visual_packet_frame = ttk.LabelFrame(visual_body, text="Visual Evidence Packet", padding=12)
+        visual_packet_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=(0, 8))
+        visual_packet_frame.columnconfigure(0, weight=1)
+        visual_packet_frame.rowconfigure(1, weight=1)
+        self.visual_packet_state_var = StringVar(value="visual evidence packet 초안이 여기에 표시됩니다.")
+        ttk.Label(visual_packet_frame, textvariable=self.visual_packet_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.visual_packet_preview = ScrolledText(visual_packet_frame, height=12, wrap="word", state="disabled")
+        self.visual_packet_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        visual_prompt_frame = ttk.LabelFrame(visual_body, text="Observation Prompt", padding=12)
+        visual_prompt_frame.grid(row=0, column=1, sticky="nsew", pady=(0, 8))
+        visual_prompt_frame.columnconfigure(0, weight=1)
+        visual_prompt_frame.rowconfigure(1, weight=1)
+        self.visual_prompt_state_var = StringVar(value="시각 관찰 프롬프트가 여기에 표시됩니다.")
+        ttk.Label(visual_prompt_frame, textvariable=self.visual_prompt_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.visual_prompt_preview = ScrolledText(visual_prompt_frame, height=12, wrap="word", state="disabled")
+        self.visual_prompt_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        visual_summary_frame = ttk.LabelFrame(visual_body, text="Visual Summary / Contradiction", padding=12)
+        visual_summary_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
+        visual_summary_frame.columnconfigure(0, weight=1)
+        visual_summary_frame.rowconfigure(1, weight=1)
+        self.visual_summary_state_var = StringVar(value="시각 요약과 contradiction 결과가 여기에 표시됩니다.")
+        ttk.Label(visual_summary_frame, textvariable=self.visual_summary_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.visual_summary_preview = ScrolledText(visual_summary_frame, height=12, wrap="word", state="disabled")
+        self.visual_summary_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+
+        visual_timeline_frame = ttk.LabelFrame(visual_body, text="Visual Timeline / Safety Guard", padding=12)
+        visual_timeline_frame.grid(row=1, column=1, sticky="nsew")
+        visual_timeline_frame.columnconfigure(0, weight=1)
+        visual_timeline_frame.rowconfigure(1, weight=1)
+        self.visual_timeline_state_var = StringVar(value="시각 이력과 capture safety 메모가 여기에 표시됩니다.")
+        ttk.Label(visual_timeline_frame, textvariable=self.visual_timeline_state_var, wraplength=360, justify="left").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.visual_timeline_preview = ScrolledText(visual_timeline_frame, height=12, wrap="word", state="disabled")
+        self.visual_timeline_preview.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
 
         advanced_section.columnconfigure(0, weight=1)
         diagnostics = ttk.LabelFrame(advanced_section, text="고급 진단", padding=12)
@@ -1163,6 +1665,708 @@ class JavisApp:
             label,
             next(iter(self.codex_mode_choice_by_label.values()), ""),
         )
+
+    def _judgment_mode_label_for_id(self, mode_id: str) -> str:
+        return self.judgment_mode_label_by_id.get(
+            mode_id,
+            next(iter(self.judgment_mode_label_by_id.values()), ""),
+        )
+
+    def _current_judgment_engine_mode_id(self) -> str:
+        label = self.judgment_engine_mode_var.get().strip()
+        return self.judgment_mode_choice_by_label.get(
+            label,
+            next(iter(self.judgment_mode_choice_by_label.values()), ""),
+        )
+
+    def _visual_target_label_for_id(self, mode_id: str) -> str:
+        return self.visual_target_label_by_id.get(
+            mode_id,
+            next(iter(self.visual_target_label_by_id.values()), ""),
+        )
+
+    def _current_visual_target_mode_id(self) -> str:
+        label = self.visual_target_mode_var.get().strip()
+        return self.visual_target_choice_by_label.get(
+            label,
+            next(iter(self.visual_target_choice_by_label.values()), ""),
+        )
+
+    def _visual_scope_label_for_id(self, scope_id: str) -> str:
+        return self.visual_scope_label_by_id.get(
+            scope_id,
+            next(iter(self.visual_scope_label_by_id.values()), ""),
+        )
+
+    def _current_visual_scope_id(self) -> str:
+        label = self.visual_capture_scope_var.get().strip()
+        return self.visual_scope_choice_by_label.get(
+            label,
+            next(iter(self.visual_scope_choice_by_label.values()), ""),
+        )
+
+    def _visual_retention_label_for_id(self, retention_id: str) -> str:
+        return self.visual_retention_label_by_id.get(
+            retention_id,
+            next(iter(self.visual_retention_label_by_id.values()), ""),
+        )
+
+    def _current_visual_retention_id(self) -> str:
+        label = self.visual_retention_var.get().strip()
+        return self.visual_retention_choice_by_label.get(
+            label,
+            next(iter(self.visual_retention_choice_by_label.values()), ""),
+        )
+
+    def _recent_log_lines(self, limit: int = 24) -> list[str]:
+        try:
+            text = self.log_text.get("1.0", END)
+        except TclError:
+            return []
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return lines[-limit:]
+
+    def _refresh_judgment_panel(self, session: SessionConfig | None = None) -> None:
+        active_session = session
+        if active_session is None:
+            try:
+                active_session = self._collect_session()
+            except Exception:
+                active_session = self.session
+
+        mode = active_session.judgment.selected_mode()
+        mode_label = self._judgment_mode_label_for_id(mode.mode_id)
+        if mode_label and self.judgment_engine_mode_var.get() != mode_label:
+            self.judgment_engine_mode_var.set(mode_label)
+        self.judgment_model_name_var.set(active_session.judgment.model_name)
+        self.judgment_confidence_var.set(str(active_session.judgment.confidence_threshold))
+
+        packet_text = self.runtime.last_judgment_packet
+        prompt_text = self.runtime.last_judgment_prompt
+        response_text = self.runtime.last_judgment_response
+        if not packet_text:
+            packet_text = self.engine.serialize_judgment_packet(
+                self.engine.build_judgment_packet(active_session, self.runtime, self._recent_log_lines())
+            )
+        if not prompt_text:
+            prompt_text = self.engine.build_judgment_prompt(
+                active_session,
+                self.runtime,
+                packet=self.engine.build_judgment_packet(active_session, self.runtime, self._recent_log_lines()),
+            )
+        timeline_text = self.engine.build_judgment_timeline(self.runtime)
+        if not response_text.strip():
+            response_text = "아직 검증된 판단 응답이 없습니다. '재판단 실행'으로 현재 상태를 평가해 보세요."
+
+        self._current_judgment_packet = packet_text
+        self._current_judgment_prompt = prompt_text
+        self._current_judgment_response = response_text
+        self._current_judgment_timeline = timeline_text
+
+        self.judgment_engine_status_var.set(
+            f"엔진 모드: {mode.title} | 모델 {active_session.judgment.model_name} | threshold {active_session.judgment.confidence_threshold:.2f}"
+        )
+        if self.runtime.last_judgment.has_result:
+            result = self.runtime.last_judgment
+            follow_up = ", ".join(result.follow_up_actions[:3]) if result.follow_up_actions else "후속 행동 없음"
+            self.judgment_result_status_var.set(
+                f"최근 판단: {result.decision} | {result.message_to_user or result.reason}"
+            )
+            self.judgment_source_status_var.set(
+                f"source {result.source or 'unknown'} | confidence {result.confidence:.2f} | risk {result.risk_level}"
+            )
+            self.judgment_follow_up_var.set(f"후속 행동: {follow_up}")
+            self.judgment_response_state_var.set("검증과 강등 규칙이 반영된 최종 판단 응답입니다.")
+        else:
+            self.judgment_result_status_var.set("아직 판단 결과가 없습니다. 재판단 실행으로 현재 상태를 점검할 수 있습니다.")
+            self.judgment_source_status_var.set("source / confidence / risk 정보는 판단 후에 표시됩니다.")
+            self.judgment_follow_up_var.set("후속 행동 요약은 판단 후에 표시됩니다.")
+            self.judgment_response_state_var.set("아직 판단을 실행하지 않았습니다.")
+
+        self.judgment_packet_state_var.set("현재 프로젝트 / 런타임 / 최근 로그를 묶은 judgment input packet입니다.")
+        self.judgment_prompt_state_var.set("정책 시스템과 입력 패킷을 조합한 judgment prompt 초안입니다.")
+        self.judgment_timeline_state_var.set("최근 판단 이력과 근거 요약, follow-up 메모를 함께 보여줍니다.")
+
+        self._set_readonly_text(self.judgment_packet_preview, packet_text)
+        self._set_readonly_text(self.judgment_prompt_preview, prompt_text)
+        self._set_readonly_text(self.judgment_response_preview, response_text)
+        self._set_readonly_text(self.judgment_timeline_preview, timeline_text)
+
+    def _on_judgment_engine_mode_selected(self, _event=None) -> None:
+        self._refresh_judgment_panel()
+
+    def _refresh_visual_panel(self, session: SessionConfig | None = None) -> None:
+        active_session = session
+        if active_session is None:
+            try:
+                active_session = self._collect_session()
+            except Exception:
+                active_session = self.session
+
+        target_label = self._visual_target_label_for_id(active_session.visual.target_mode_id)
+        if target_label and self.visual_target_mode_var.get() != target_label:
+            self.visual_target_mode_var.set(target_label)
+        scope_label = self._visual_scope_label_for_id(active_session.visual.capture_scope_id)
+        if scope_label and self.visual_capture_scope_var.get() != scope_label:
+            self.visual_capture_scope_var.set(scope_label)
+        retention_label = self._visual_retention_label_for_id(active_session.visual.retention_hint_id)
+        if retention_label and self.visual_retention_var.get() != retention_label:
+            self.visual_retention_var.set(retention_label)
+        self.visual_sensitive_risk_var.set(active_session.visual.sensitive_content_risk)
+
+        packet = self.engine.build_visual_evidence_packet(active_session, self.runtime, self._recent_log_lines())
+        prompt = self.engine.build_visual_observation_prompt(active_session, self.runtime, packet=packet)
+        summary_text = self.runtime.last_visual_summary or "아직 시각 판단 결과가 없습니다. '시각 재판단'으로 현재 화면 근거를 점검해 보세요."
+        timeline = self.engine.build_visual_timeline(self.runtime)
+
+        self._current_visual_packet = self.engine.serialize_visual_evidence_packet(packet)
+        self._current_visual_prompt = prompt
+        self._current_visual_summary = summary_text
+        self._current_visual_timeline = timeline
+
+        target_meta = packet.get("target_meta", {})
+        safety = packet.get("safety", {})
+        self.visual_target_status_var.set(
+            f"현재 planner: {target_meta.get('target_label', '화면')} | trigger {target_meta.get('trigger', 'none')} | priority {target_meta.get('priority', 'medium')}"
+        )
+        if self.runtime.last_visual_result.has_result:
+            result = self.runtime.last_visual_result
+            self.visual_summary_status_var.set(
+                f"최근 시각 판단: contradiction {result.contradiction_level} | hint {result.decision_hint} | {result.message_to_user}"
+            )
+        else:
+            self.visual_summary_status_var.set("아직 시각 판단 결과가 없습니다. 현재 단계와 최근 캡처를 기준으로 planner만 미리 보여줍니다.")
+        self.visual_guard_status_var.set(
+            f"capture scope {safety.get('capture_scope_label', '미정')} | retention {safety.get('retention_label', '미정')} | sensitive risk {safety.get('sensitive_content_risk', 'medium')}"
+        )
+
+        self.visual_packet_state_var.set("무엇을 왜 캡처하고 어떤 신호를 볼지 정리한 visual evidence packet입니다.")
+        self.visual_prompt_state_var.set("시각 근거를 판정 중심으로 읽게 하는 observation prompt입니다.")
+        self.visual_summary_state_var.set("최근 시각 판단 결과, contradiction, decision hint를 함께 보여줍니다.")
+        self.visual_timeline_state_var.set("최근 시각 이력과 capture safety 메모를 함께 보여줍니다.")
+
+        self._set_readonly_text(self.visual_packet_preview, self._current_visual_packet)
+        self._set_readonly_text(self.visual_prompt_preview, self._current_visual_prompt)
+        self._set_readonly_text(self.visual_summary_preview, summary_text)
+        self._set_readonly_text(self.visual_timeline_preview, timeline)
+
+    def _on_visual_settings_changed(self, _event=None) -> None:
+        self._refresh_visual_panel()
+
+    def refresh_visual_evidence(self) -> None:
+        try:
+            self.session = self._collect_session()
+            self._refresh_visual_panel(self.session)
+            self._save_session_quietly()
+            self._log("현재 단계와 최근 로그 기준으로 visual evidence packet과 observation prompt를 다시 만들었습니다.")
+        except Exception as exc:
+            messagebox.showerror("시각 패킷 새로고침 실패", str(exc))
+
+    def run_visual_rejudge_now(self) -> None:
+        try:
+            self.session = self._collect_session()
+            visual_result, judgment_result = self.engine.run_visual_rejudge(
+                self.session,
+                self.runtime,
+                recent_log_lines=self._recent_log_lines(),
+            )
+            if judgment_result.decision == "retry" and (judgment_result.next_prompt_to_codex or "").strip():
+                self.runtime.update_prompt_draft(judgment_result.next_prompt_to_codex.strip())
+            if judgment_result.decision in {"pause", "ask_user"}:
+                self.runtime.set_operator_pause(judgment_result.message_to_user or judgment_result.reason)
+            elif judgment_result.decision == "continue":
+                self.runtime.clear_operator_pause()
+            self._save_session_quietly()
+            self._refresh_prompt_panel_from_current_session()
+            self._refresh_runtime_labels()
+            self._refresh_visual_panel(self.session)
+            self._log(
+                f"시각 재판단 완료: contradiction {visual_result.contradiction_level} -> {judgment_result.decision}"
+            )
+        except Exception as exc:
+            messagebox.showerror("시각 재판단 실패", str(exc))
+
+    def copy_visual_packet(self) -> None:
+        try:
+            if not self._current_visual_packet.strip():
+                self._refresh_visual_panel()
+            self._copy_text_to_clipboard(
+                title="Visual Packet 복사",
+                text=self._current_visual_packet,
+                success_log="Visual evidence packet을 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Visual packet 복사 실패", str(exc))
+
+    def copy_visual_prompt(self) -> None:
+        try:
+            if not self._current_visual_prompt.strip():
+                self._refresh_visual_panel()
+            self._copy_text_to_clipboard(
+                title="Visual Prompt 복사",
+                text=self._current_visual_prompt,
+                success_log="Observation prompt를 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Observation prompt 복사 실패", str(exc))
+
+    def copy_visual_summary(self) -> None:
+        try:
+            if not self._current_visual_summary.strip():
+                self._refresh_visual_panel()
+            self._copy_text_to_clipboard(
+                title="Visual Summary 복사",
+                text=self._current_visual_summary,
+                success_log="시각 요약과 contradiction 결과를 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Visual summary 복사 실패", str(exc))
+
+    def copy_visual_timeline(self) -> None:
+        try:
+            if not self._current_visual_timeline.strip():
+                self._refresh_visual_panel()
+            self._copy_text_to_clipboard(
+                title="Visual Timeline 복사",
+                text=self._current_visual_timeline,
+                success_log="시각 타임라인과 safety 메모를 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Visual timeline 복사 실패", str(exc))
+
+    def run_judgment_now(self) -> None:
+        try:
+            self.session = self._collect_session()
+            result = self.engine.run_judgment(
+                self.session,
+                self.runtime,
+                recent_log_lines=self._recent_log_lines(),
+            )
+            if result.decision == "retry" and (result.next_prompt_to_codex or "").strip():
+                self.runtime.update_prompt_draft(result.next_prompt_to_codex.strip())
+            if result.decision in {"pause", "ask_user"}:
+                self.runtime.set_operator_pause(result.message_to_user or result.reason)
+            elif result.decision == "continue":
+                self.runtime.clear_operator_pause()
+            self._save_session_quietly()
+            self._refresh_prompt_panel_from_current_session()
+            self._refresh_runtime_labels()
+            self._log(
+                f"재판단 완료: {result.decision} | conf {result.confidence:.2f} | risk {result.risk_level}"
+            )
+            for note in result.validation_notes:
+                self._log(f"[판단 검증] {note}")
+        except Exception as exc:
+            messagebox.showerror("재판단 실패", str(exc))
+
+    def retry_now(self) -> None:
+        result = self.runtime.last_judgment
+        if not result.has_result or result.decision != "retry" or not (result.next_prompt_to_codex or "").strip():
+            messagebox.showerror("재지시 실패", "현재 retry 판단 결과가 없어 보정 프롬프트를 바로 보낼 수 없습니다.")
+            return
+        self.runtime.update_prompt_draft(result.next_prompt_to_codex.strip())
+        self._refresh_prompt_panel_from_current_session()
+        self._log("판단 결과의 보정 프롬프트를 현재 단계 편집본으로 반영했습니다.")
+        self.send_next_step()
+
+    def copy_judgment_packet(self) -> None:
+        try:
+            if not self._current_judgment_packet.strip():
+                self._refresh_judgment_panel()
+            self._copy_text_to_clipboard(
+                title="Judgment Packet 복사",
+                text=self._current_judgment_packet,
+                success_log="Judgment packet을 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("패킷 복사 실패", str(exc))
+
+    def copy_judgment_prompt(self) -> None:
+        try:
+            if not self._current_judgment_prompt.strip():
+                self._refresh_judgment_panel()
+            self._copy_text_to_clipboard(
+                title="Judgment Prompt 복사",
+                text=self._current_judgment_prompt,
+                success_log="Judgment prompt를 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("프롬프트 복사 실패", str(exc))
+
+    def copy_judgment_response(self) -> None:
+        try:
+            if not self._current_judgment_response.strip():
+                self._refresh_judgment_panel()
+            self._copy_text_to_clipboard(
+                title="Judgment Response 복사",
+                text=self._current_judgment_response,
+                success_log="검증된 판단 응답을 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("응답 복사 실패", str(exc))
+
+    def copy_judgment_timeline(self) -> None:
+        try:
+            if not self._current_judgment_timeline.strip():
+                self._refresh_judgment_panel()
+            self._copy_text_to_clipboard(
+                title="Judgment Timeline 복사",
+                text=self._current_judgment_timeline,
+                success_log="판단 타임라인과 근거 요약을 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("타임라인 복사 실패", str(exc))
+
+    def _refresh_visual_panel(self, session: SessionConfig | None = None) -> None:
+        active_session = session
+        if active_session is None:
+            try:
+                active_session = self._collect_session()
+            except Exception:
+                active_session = self.session
+
+        target_label = self._visual_target_label_for_id(active_session.visual.target_mode_id)
+        if target_label and self.visual_target_mode_var.get() != target_label:
+            self.visual_target_mode_var.set(target_label)
+        scope_label = self._visual_scope_label_for_id(active_session.visual.capture_scope_id)
+        if scope_label and self.visual_capture_scope_var.get() != scope_label:
+            self.visual_capture_scope_var.set(scope_label)
+        retention_label = self._visual_retention_label_for_id(active_session.visual.retention_hint_id)
+        if retention_label and self.visual_retention_var.get() != retention_label:
+            self.visual_retention_var.set(retention_label)
+        self.visual_sensitive_risk_var.set(active_session.visual.sensitive_content_risk)
+
+        packet = self.engine.build_visual_evidence_packet(active_session, self.runtime, self._recent_log_lines())
+        prompt = self.engine.build_visual_observation_prompt(active_session, self.runtime, packet=packet)
+        summary_text = self.runtime.last_visual_summary or "아직 시각 판단 결과가 없습니다. '시각 재판단'으로 현재 화면 근거를 점검해 보세요."
+        timeline = self.engine.build_visual_timeline(self.runtime)
+
+        self._current_visual_packet = self.engine.serialize_visual_evidence_packet(packet)
+        self._current_visual_prompt = prompt
+        self._current_visual_summary = summary_text
+        self._current_visual_timeline = timeline
+
+        target_meta = packet.get("target_meta", {})
+        safety = packet.get("safety", {})
+        self.visual_target_status_var.set(
+            f"현재 planner: {target_meta.get('target_label', '화면')} | trigger {target_meta.get('trigger', 'none')} | priority {target_meta.get('priority', 'medium')}"
+        )
+        if self.runtime.last_visual_result.has_result:
+            result = self.runtime.last_visual_result
+            self.visual_summary_status_var.set(
+                f"최근 시각 판단: contradiction {result.contradiction_level} | hint {result.decision_hint} | {result.message_to_user}"
+            )
+        else:
+            self.visual_summary_status_var.set("아직 시각 판단 결과가 없습니다. 현재 단계와 최근 캡처를 기준으로 planner만 미리 보여줍니다.")
+        self.visual_guard_status_var.set(
+            f"capture scope {safety.get('capture_scope_label', '미정')} | retention {safety.get('retention_label', '미정')} | sensitive risk {safety.get('sensitive_content_risk', 'medium')}"
+        )
+
+        self.visual_packet_state_var.set("무엇을 왜 캡처하고 어떤 신호를 볼지 정리한 visual evidence packet입니다.")
+        self.visual_prompt_state_var.set("시각 근거를 판정 중심으로 읽게 하는 observation prompt입니다.")
+        self.visual_summary_state_var.set("최근 시각 판단 결과, contradiction, decision hint를 함께 보여줍니다.")
+        self.visual_timeline_state_var.set("최근 시각 이력과 capture safety 메모를 함께 보여줍니다.")
+
+        self._set_readonly_text(self.visual_packet_preview, self._current_visual_packet)
+        self._set_readonly_text(self.visual_prompt_preview, self._current_visual_prompt)
+        self._set_readonly_text(self.visual_summary_preview, summary_text)
+        self._set_readonly_text(self.visual_timeline_preview, timeline)
+
+    def _on_visual_settings_changed(self, _event=None) -> None:
+        self._refresh_visual_panel()
+
+    def refresh_visual_evidence(self) -> None:
+        try:
+            self.session = self._collect_session()
+            self._refresh_visual_panel(self.session)
+            self._save_session_quietly()
+            self._log("현재 단계와 최근 로그 기준으로 visual evidence packet과 observation prompt를 다시 만들었습니다.")
+        except Exception as exc:
+            messagebox.showerror("시각 패킷 새로고침 실패", str(exc))
+
+    def run_visual_rejudge_now(self) -> None:
+        try:
+            self.session = self._collect_session()
+            visual_result, judgment_result = self.engine.run_visual_rejudge(
+                self.session,
+                self.runtime,
+                recent_log_lines=self._recent_log_lines(),
+            )
+            if judgment_result.decision == "retry" and (judgment_result.next_prompt_to_codex or "").strip():
+                self.runtime.update_prompt_draft(judgment_result.next_prompt_to_codex.strip())
+            if judgment_result.decision in {"pause", "ask_user"}:
+                self.runtime.set_operator_pause(judgment_result.message_to_user or judgment_result.reason)
+            elif judgment_result.decision == "continue":
+                self.runtime.clear_operator_pause()
+            self._save_session_quietly()
+            self._refresh_prompt_panel_from_current_session()
+            self._refresh_runtime_labels()
+            self._refresh_visual_panel(self.session)
+            self._log(
+                f"시각 재판단 완료: contradiction {visual_result.contradiction_level} -> {judgment_result.decision}"
+            )
+        except Exception as exc:
+            messagebox.showerror("시각 재판단 실패", str(exc))
+
+    def copy_visual_packet(self) -> None:
+        try:
+            if not self._current_visual_packet.strip():
+                self._refresh_visual_panel()
+            self._copy_text_to_clipboard(
+                title="Visual Packet 복사",
+                text=self._current_visual_packet,
+                success_log="Visual evidence packet을 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Visual packet 복사 실패", str(exc))
+
+    def copy_visual_prompt(self) -> None:
+        try:
+            if not self._current_visual_prompt.strip():
+                self._refresh_visual_panel()
+            self._copy_text_to_clipboard(
+                title="Visual Prompt 복사",
+                text=self._current_visual_prompt,
+                success_log="Observation prompt를 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Observation prompt 복사 실패", str(exc))
+
+    def copy_visual_summary(self) -> None:
+        try:
+            if not self._current_visual_summary.strip():
+                self._refresh_visual_panel()
+            self._copy_text_to_clipboard(
+                title="Visual Summary 복사",
+                text=self._current_visual_summary,
+                success_log="시각 요약과 contradiction 결과를 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Visual summary 복사 실패", str(exc))
+
+    def copy_visual_timeline(self) -> None:
+        try:
+            if not self._current_visual_timeline.strip():
+                self._refresh_visual_panel()
+            self._copy_text_to_clipboard(
+                title="Visual Timeline 복사",
+                text=self._current_visual_timeline,
+                success_log="시각 타임라인과 safety 메모를 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Visual timeline 복사 실패", str(exc))
+
+    def _refresh_voice_panel(self, session: SessionConfig | None = None) -> None:
+        active_session = session
+        if active_session is None:
+            try:
+                active_session = self._collect_session()
+            except Exception:
+                active_session = self.session
+
+        self.voice_language_var.set(active_session.voice.language_code)
+        self.voice_microphone_var.set(active_session.voice.microphone_name)
+        self.voice_speaker_var.set(active_session.voice.speaker_name)
+        self.voice_auto_brief_var.set(active_session.voice.auto_brief_enabled)
+        self.voice_confirmation_var.set(active_session.voice.confirmation_enabled)
+        self.voice_spoken_feedback_var.set(active_session.voice.spoken_feedback_enabled)
+        self.voice_ambient_ready_var.set(active_session.voice.ambient_ready_enabled)
+
+        transcript_text = self.runtime.voice_last_transcript.strip()
+        current_transcript = self.voice_transcript_input.get("1.0", END).rstrip("\n")
+        if transcript_text and current_transcript != transcript_text:
+            self._set_scrolled_text(self.voice_transcript_input, transcript_text)
+
+        if self.runtime.last_voice_result.has_result:
+            result = self.runtime.last_voice_result
+            result_text = json.dumps(result.to_dict(), ensure_ascii=False, indent=2)
+            self.voice_result_status_var.set(
+                f"최근 intent: {result.normalized_intent_id or 'unknown'} | action {result.action_status or 'none'} | confidence {result.intent_confidence:.2f}"
+            )
+            self.voice_capture_status_var.set(
+                f"voice capture: {self.runtime.voice_capture_state} | 마지막 transcript 길이 {len(result.transcript_text.strip())}자"
+            )
+            self.voice_result_state_var.set("최근 voice intent 결과와 action routing 상태입니다.")
+        else:
+            result_text = "아직 voice intent 결과가 없습니다."
+            self.voice_capture_status_var.set(
+                f"voice capture: {self.runtime.voice_capture_state} | transcript를 넣고 'voice 실행'을 눌러주세요."
+            )
+            self.voice_result_status_var.set("아직 voice intent 결과가 없습니다.")
+            self.voice_result_state_var.set("voice intent 결과가 여기 표시됩니다.")
+
+        if self.runtime.voice_pending_action_id:
+            self.voice_confirmation_status_var.set(
+                "대기 중 확인: "
+                f"{self.runtime.voice_pending_action_id} | {self.runtime.voice_pending_confirmation_text or '확인이 필요합니다.'}"
+            )
+        else:
+            self.voice_confirmation_status_var.set("대기 중인 voice confirmation이 없습니다.")
+
+        briefing_text = self.runtime.voice_last_briefing.strip()
+        if not briefing_text:
+            briefing_text = self.engine.build_voice_briefing(active_session, self.runtime, intent_id="status_summary")
+        self.voice_briefing_state_var.set(
+            "spoken feedback는 현재 텍스트 브리핑으로 검증합니다."
+            if active_session.voice.spoken_feedback_enabled
+            else "spoken feedback는 꺼져 있지만 브리핑 초안은 계속 생성합니다."
+        )
+
+        timeline_text = self.engine.build_voice_timeline(self.runtime)
+        self.voice_timeline_state_var.set("최근 voice history, confirmation guard, pending action을 함께 보여줍니다.")
+
+        self._current_voice_result = result_text
+        self._current_voice_briefing = briefing_text
+        self._current_voice_timeline = timeline_text
+        self._set_readonly_text(self.voice_result_preview, result_text)
+        self._set_readonly_text(self.voice_briefing_preview, briefing_text)
+        self._set_readonly_text(self.voice_timeline_preview, timeline_text)
+
+    def _dispatch_voice_action(self, action_id: str) -> None:
+        if action_id == "open_settings":
+            self.open_control_center()
+            self._select_control_center_section("model_voice")
+            return
+        self.perform_surface_action(action_id)
+
+    def toggle_voice_capture(self) -> None:
+        try:
+            if self.runtime.voice_capture_state == "recording":
+                self.runtime.voice_capture_state = "idle"
+                self._log("push-to-talk 대기 상태로 돌아왔습니다.")
+            else:
+                self.runtime.voice_capture_state = "recording"
+                self._log("push-to-talk 준비 상태입니다. transcript를 붙여넣거나 직접 적은 뒤 'voice 실행'을 눌러주세요.")
+            self._save_session_quietly()
+            self._refresh_runtime_labels()
+            self._refresh_voice_panel(self.session)
+        except Exception as exc:
+            messagebox.showerror("Push-to-Talk 전환 실패", str(exc))
+
+    def run_voice_command_now(self) -> None:
+        try:
+            self.session = self._collect_session()
+            transcript = self.voice_transcript_input.get("1.0", END).strip()
+            self.runtime.voice_last_transcript = transcript
+            result = self.engine.run_voice_command(self.session, self.runtime, transcript)
+
+            if result.spoken_briefing_text.strip():
+                self.runtime.voice_last_briefing = result.spoken_briefing_text.strip()
+
+            if result.action_status == "executed" and result.action_id:
+                self._dispatch_voice_action(result.action_id)
+
+            self._save_session_quietly()
+            self._refresh_prompt_panel_from_current_session()
+            self._refresh_runtime_labels()
+            self._refresh_voice_panel(self.session)
+
+            self._log(
+                "voice intent 처리: "
+                f"{result.normalized_intent_id or 'unknown'} -> {result.action_status or 'none'}"
+            )
+            if result.clarification_question:
+                self._log(f"[voice clarify] {result.clarification_question}")
+            if result.action_status == "confirmation_required":
+                self._log(
+                    "[voice 확인 필요] "
+                    f"{result.action_id or 'action'} | {result.message_to_user or '한 번 더 확인이 필요합니다.'}"
+                )
+            if self.session.voice.spoken_feedback_enabled and result.spoken_briefing_text.strip():
+                self._log(f"[voice 브리핑] {result.spoken_briefing_text.strip()}")
+        except Exception as exc:
+            messagebox.showerror("Voice 실행 실패", str(exc))
+
+    def play_voice_briefing_now(self) -> None:
+        try:
+            self.session = self._collect_session()
+            briefing = self.engine.build_voice_briefing(self.session, self.runtime, intent_id="status_summary")
+            self.runtime.voice_last_briefing = briefing
+            self._save_session_quietly()
+            self._refresh_voice_panel(self.session)
+            self._refresh_runtime_labels()
+            if self.session.voice.spoken_feedback_enabled and briefing.strip():
+                self._log(f"[voice 브리핑] {briefing.strip()}")
+            else:
+                self._log("현재 상태 브리핑 초안을 새로 만들었습니다.")
+        except Exception as exc:
+            messagebox.showerror("브리핑 생성 실패", str(exc))
+
+    def confirm_pending_voice_action(self) -> None:
+        if not self.runtime.voice_pending_action_id:
+            messagebox.showerror("Voice 확인", "현재 대기 중인 voice confirmation이 없습니다.")
+            return
+        try:
+            self.session = self._collect_session()
+            result = self.engine.run_voice_command(self.session, self.runtime, "확인")
+            if result.spoken_briefing_text.strip():
+                self.runtime.voice_last_briefing = result.spoken_briefing_text.strip()
+            if result.action_status == "executed" and result.action_id:
+                self._dispatch_voice_action(result.action_id)
+            self._save_session_quietly()
+            self._refresh_prompt_panel_from_current_session()
+            self._refresh_runtime_labels()
+            self._refresh_voice_panel(self.session)
+            self._log(f"voice 확인 처리: {result.message_to_user or result.normalized_intent_id}")
+            if self.session.voice.spoken_feedback_enabled and result.spoken_briefing_text.strip():
+                self._log(f"[voice 브리핑] {result.spoken_briefing_text.strip()}")
+        except Exception as exc:
+            messagebox.showerror("Voice 확인 실패", str(exc))
+
+    def cancel_pending_voice_action(self) -> None:
+        if not self.runtime.voice_pending_action_id:
+            messagebox.showerror("Voice 취소", "현재 취소할 voice confirmation이 없습니다.")
+            return
+        try:
+            self.session = self._collect_session()
+            result = self.engine.run_voice_command(self.session, self.runtime, "취소")
+            if result.spoken_briefing_text.strip():
+                self.runtime.voice_last_briefing = result.spoken_briefing_text.strip()
+            self._save_session_quietly()
+            self._refresh_prompt_panel_from_current_session()
+            self._refresh_runtime_labels()
+            self._refresh_voice_panel(self.session)
+            self._log(f"voice 확인 취소: {result.message_to_user or result.normalized_intent_id}")
+            if self.session.voice.spoken_feedback_enabled and result.spoken_briefing_text.strip():
+                self._log(f"[voice 브리핑] {result.spoken_briefing_text.strip()}")
+        except Exception as exc:
+            messagebox.showerror("Voice 취소 실패", str(exc))
+
+    def copy_voice_result(self) -> None:
+        try:
+            if not self._current_voice_result.strip():
+                self._refresh_voice_panel()
+            self._copy_text_to_clipboard(
+                title="Voice Result 복사",
+                text=self._current_voice_result,
+                success_log="Voice intent 결과를 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Voice result 복사 실패", str(exc))
+
+    def copy_voice_briefing(self) -> None:
+        try:
+            if not self._current_voice_briefing.strip():
+                self._refresh_voice_panel()
+            self._copy_text_to_clipboard(
+                title="Voice Briefing 복사",
+                text=self._current_voice_briefing,
+                success_log="현재 voice briefing 초안을 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Voice briefing 복사 실패", str(exc))
+
+    def copy_voice_timeline(self) -> None:
+        try:
+            if not self._current_voice_timeline.strip():
+                self._refresh_voice_panel()
+            self._copy_text_to_clipboard(
+                title="Voice Timeline 복사",
+                text=self._current_voice_timeline,
+                success_log="Voice timeline과 guard 상태를 클립보드에 복사했습니다.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Voice timeline 복사 실패", str(exc))
 
     def _refresh_codex_strategy_panel(self, session: SessionConfig | None = None) -> None:
         active_session = session
@@ -1457,6 +2661,7 @@ class JavisApp:
         )
         handlers = {
             "continue": self.send_next_step,
+            "retry_now": self.retry_now,
             "resume_ready": self.resume_after_pause,
             "start_auto": self.toggle_auto,
             "pause_auto": self.pause_automation,
@@ -1465,14 +2670,8 @@ class JavisApp:
             "refresh_windows": self.refresh_windows,
             "focus_codex": self.focus_codex,
             "capture_now": self.capture_now,
-            "voice_brief": lambda: self._show_future_action_placeholder(
-                "음성 브리핑",
-                "음성 브리핑은 Voice 단계에서 연결될 예정입니다.",
-            ),
-            "rejudge": lambda: self._show_future_action_placeholder(
-                "재판단",
-                "재판단 액션은 OpenAI 판단 엔진이 붙는 단계에서 연결될 예정입니다.",
-            ),
+            "voice_brief": self.play_voice_briefing_now,
+            "rejudge": self.run_judgment_now,
         }
         handler = handlers.get(action_id)
         if handler is None:
@@ -1531,6 +2730,16 @@ class JavisApp:
             f"상세: {self._surface_state.detail_label}",
             f"위험: {self._surface_state.risk_label}",
         ]
+        if self.runtime.last_judgment.has_result:
+            result = self.runtime.last_judgment
+            lines.extend(
+                [
+                    f"판단: {result.decision}",
+                    f"판단 근거: {result.reason}",
+                    f"confidence: {result.confidence:.2f}",
+                    f"source: {result.source or 'unknown'}",
+                ]
+            )
         messagebox.showinfo("javis 요약", "\n\n".join(lines))
 
     def _close_application(self) -> None:
@@ -1541,6 +2750,47 @@ class JavisApp:
         except TclError:
             pass
         self.root.destroy()
+
+    def show_status_summary(self) -> None:
+        if self._popup_compact:
+            self.toggle_popup_compact()
+            self._log("팝업 상세 카드를 다시 펼쳤습니다.")
+            return
+
+        lines = [
+            f"상태: {self._surface_state.badge_label}",
+            f"현재: {self._surface_state.title}",
+            f"요약: {self._surface_state.summary}",
+            f"이유: {self._surface_state.reason}",
+            f"다음 행동: {self._surface_state.next_action}",
+            f"진행도: {self._surface_state.progress_label}",
+            f"상세: {self._surface_state.detail_label}",
+            f"위험: {self._surface_state.risk_label}",
+        ]
+
+        if self.runtime.last_judgment.has_result:
+            result = self.runtime.last_judgment
+            lines.extend(
+                [
+                    f"판단: {result.decision}",
+                    f"판단 근거: {result.reason}",
+                    f"confidence: {result.confidence:.2f}",
+                    f"source: {result.source or 'unknown'}",
+                ]
+            )
+
+        if self.runtime.last_visual_result.has_result:
+            visual_result = self.runtime.last_visual_result
+            lines.extend(
+                [
+                    f"시각 contradiction: {visual_result.contradiction_level}",
+                    f"시각 hint: {visual_result.decision_hint}",
+                    f"시각 근거: {visual_result.contradiction_reason}",
+                    f"시각 관찰: {visual_result.observed_summary}",
+                ]
+            )
+
+        messagebox.showinfo("javis 요약", "\n\n".join(lines))
 
     def _add_entry(self, parent: ttk.LabelFrame, row: int, label: str) -> StringVar:
         var = StringVar()
@@ -1830,6 +3080,9 @@ class JavisApp:
         self._refresh_surface_state()
         self._render_prompt_panel(preview, queue)
         self._refresh_codex_strategy_panel(self.session)
+        self._refresh_judgment_panel(self.session)
+        self._refresh_visual_panel(self.session)
+        self._refresh_voice_panel(self.session)
         self._refresh_popup_shell()
 
     def _render_prompt_panel(self, preview: PromptPreview, queue: list[StepQueueItem]) -> None:
@@ -1907,7 +3160,27 @@ class JavisApp:
         self._set_scrolled_text(self.steps_text, self.session.project.steps_text)
         self.codex_strategy_var.set(self._codex_strategy_label_for_id(self.session.codex_strategy.selected_preset_id))
         self.codex_mode_var.set(self._codex_mode_label_for_id(self.session.codex_strategy.selected_mode_id))
+        self.judgment_engine_mode_var.set(self._judgment_mode_label_for_id(self.session.judgment.engine_mode_id))
+        self.judgment_model_name_var.set(self.session.judgment.model_name)
+        self.judgment_confidence_var.set(str(self.session.judgment.confidence_threshold))
+        self.visual_target_mode_var.set(self._visual_target_label_for_id(self.session.visual.target_mode_id))
+        self.visual_capture_scope_var.set(self._visual_scope_label_for_id(self.session.visual.capture_scope_id))
+        self.visual_retention_var.set(self._visual_retention_label_for_id(self.session.visual.retention_hint_id))
+        self.visual_sensitive_risk_var.set(self.session.visual.sensitive_content_risk)
+        self.voice_language_var.set(self.session.voice.language_code)
+        self.voice_microphone_var.set(self.session.voice.microphone_name)
+        self.voice_speaker_var.set(self.session.voice.speaker_name)
+        self.voice_auto_brief_var.set(self.session.voice.auto_brief_enabled)
+        self.voice_confirmation_var.set(self.session.voice.confirmation_enabled)
+        self.voice_spoken_feedback_var.set(self.session.voice.spoken_feedback_enabled)
+        self.voice_ambient_ready_var.set(self.session.voice.ambient_ready_enabled)
         self._set_scrolled_text(self.codex_strategy_note, self.session.codex_strategy.custom_instruction)
+        self._set_scrolled_text(self.visual_expected_page, self.session.visual.expected_page)
+        self._set_scrolled_text(self.visual_focus, self.session.visual.observation_focus_text)
+        self._set_scrolled_text(self.visual_expected_signals, self.session.visual.expected_signals_text)
+        self._set_scrolled_text(self.visual_disallowed_signals, self.session.visual.disallowed_signals_text)
+        self._set_scrolled_text(self.visual_observed_notes, self.session.visual.observed_notes_text)
+        self._set_scrolled_text(self.voice_transcript_input, self.runtime.voice_last_transcript)
         self._load_policy_editors()
 
         self.window_title_var.set(self.session.window.title_contains)
@@ -1932,6 +3205,9 @@ class JavisApp:
         self._refresh_control_center_header()
         self._refresh_project_home()
         self._refresh_codex_strategy_panel(self.session)
+        self._refresh_judgment_panel(self.session)
+        self._refresh_visual_panel(self.session)
+        self._refresh_voice_panel(self.session)
         self._refresh_popup_shell()
 
     def _collect_session(self) -> SessionConfig:
@@ -1942,6 +3218,25 @@ class JavisApp:
         session.codex_strategy.selected_preset_id = self._current_codex_strategy_preset_id()
         session.codex_strategy.selected_mode_id = self._current_codex_mode_id()
         session.codex_strategy.custom_instruction = self.codex_strategy_note.get("1.0", END).strip()
+        session.judgment.engine_mode_id = self._current_judgment_engine_mode_id()
+        session.judgment.model_name = self.judgment_model_name_var.get().strip() or session.judgment.model_name
+        session.judgment.confidence_threshold = float(self.judgment_confidence_var.get().strip() or "0.6")
+        session.visual.target_mode_id = self._current_visual_target_mode_id()
+        session.visual.capture_scope_id = self._current_visual_scope_id()
+        session.visual.retention_hint_id = self._current_visual_retention_id()
+        session.visual.sensitive_content_risk = self.visual_sensitive_risk_var.get().strip() or "medium"
+        session.visual.expected_page = self.visual_expected_page.get("1.0", END).strip()
+        session.visual.observation_focus_text = self.visual_focus.get("1.0", END).strip()
+        session.visual.expected_signals_text = self.visual_expected_signals.get("1.0", END).strip()
+        session.visual.disallowed_signals_text = self.visual_disallowed_signals.get("1.0", END).strip()
+        session.visual.observed_notes_text = self.visual_observed_notes.get("1.0", END).strip()
+        session.voice.language_code = self.voice_language_var.get().strip() or session.voice.language_code
+        session.voice.microphone_name = self.voice_microphone_var.get().strip()
+        session.voice.speaker_name = self.voice_speaker_var.get().strip()
+        session.voice.auto_brief_enabled = bool(self.voice_auto_brief_var.get())
+        session.voice.confirmation_enabled = bool(self.voice_confirmation_var.get())
+        session.voice.spoken_feedback_enabled = bool(self.voice_spoken_feedback_var.get())
+        session.voice.ambient_ready_enabled = bool(self.voice_ambient_ready_var.get())
 
         sections, note = self._policy_input_snapshot()
         for section_key, _section_label, _section_description in POLICY_SECTION_SPECS:
@@ -2341,11 +3636,17 @@ class JavisApp:
         self.calibration_summary_var.set(f"{summary} | 딜레이 캡처 {delay}초")
 
     def _refresh_surface_state(self) -> None:
-        self._surface_state = self.engine.build_surface_state(
+        base_state = self.engine.build_surface_state(
             self.session,
             self.runtime,
             preview=self._current_preview,
             queue=self._current_queue,
+        )
+        self._surface_state = self.engine.apply_judgment_surface_overlay(
+            base_state,
+            self.session,
+            self.runtime,
+            preview=self._current_preview,
         )
 
     def _refresh_popup_shell(self) -> None:
@@ -2376,6 +3677,9 @@ class JavisApp:
         self._refresh_surface_state()
         self._refresh_control_center_header()
         self._refresh_project_home()
+        self._refresh_judgment_panel(self.session)
+        self._refresh_visual_panel(self.session)
+        self._refresh_voice_panel(self.session)
         self._refresh_popup_shell()
 
     def _pump_logs(self) -> None:
